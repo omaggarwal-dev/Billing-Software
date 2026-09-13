@@ -13,10 +13,15 @@ export const tableSchema = z.object({
 
 export const updateTableSchema = tableSchema.partial();
 
+export const openSessionSchema = z.object({
+  partyName: z.string().trim().optional(),
+  guestCount: z.number().int().positive("Guest count must be at least 1").default(1),
+});
+
 export async function listTables(franchiseId: string | null) {
   if (!franchiseId) return [];
 
-  return prisma.restaurantTable.findMany({
+  const tables = await prisma.restaurantTable.findMany({
     where: { franchiseId },
     include: {
       sessions: {
@@ -31,11 +36,18 @@ export async function listTables(franchiseId: string | null) {
             },
           },
         },
-        take: 1,
         orderBy: { startedAt: "desc" },
       },
     },
     orderBy: { tableNumber: "asc" },
+  });
+
+  return tables.map((t) => {
+    const remaining = Math.max(0, t.capacity - (t.currentOccupancy || 0));
+    return {
+      ...t,
+      remainingCapacity: remaining,
+    };
   });
 }
 
@@ -54,7 +66,6 @@ export async function getTableById(id: string, franchiseId: string | null) {
             },
           },
         },
-        take: 1,
         orderBy: { startedAt: "desc" },
       },
     },
@@ -64,7 +75,11 @@ export async function getTableById(id: string, franchiseId: string | null) {
     throw new AppError("Table not found", 404);
   }
 
-  return table;
+  const remaining = Math.max(0, table.capacity - (table.currentOccupancy || 0));
+  return {
+    ...table,
+    remainingCapacity: remaining,
+  };
 }
 
 export async function createTable(
@@ -90,6 +105,7 @@ export async function createTable(
       franchiseId,
       tableNumber: data.tableNumber,
       capacity: data.capacity,
+      currentOccupancy: 0,
       status: data.status,
     },
   });
@@ -151,7 +167,12 @@ export async function updateTable(
   return updated;
 }
 
-export async function openTableSession(tableId: string, franchiseId: string, currentUserId?: string) {
+export async function openTableSession(
+  tableId: string,
+  franchiseId: string,
+  options: { guestCount?: number; partyName?: string } = {},
+  currentUserId?: string
+) {
   const table = await prisma.restaurantTable.findUnique({
     where: { id: tableId },
     include: {
@@ -163,21 +184,49 @@ export async function openTableSession(tableId: string, franchiseId: string, cur
     throw new AppError("Table not found", 404);
   }
 
-  if (table.sessions.length > 0) {
-    return table.sessions[0];
+  const guests = options.guestCount || 1;
+  const currentOcc = table.currentOccupancy || 0;
+  const remainingCap = Math.max(0, table.capacity - currentOcc);
+
+  if (remainingCap < guests) {
+    // Find intelligent suggested tables
+    const allTables = await prisma.restaurantTable.findMany({
+      where: { franchiseId, status: { not: TableStatus.OUT_OF_SERVICE } },
+    });
+    const suggested = allTables
+      .filter((t) => t.id !== tableId && (t.capacity - t.currentOccupancy) >= guests)
+      .map((t) => ({
+        id: t.id,
+        tableNumber: t.tableNumber,
+        capacity: t.capacity,
+        availableSeats: t.capacity - t.currentOccupancy,
+        status: t.status,
+      }))
+      .slice(0, 3);
+
+    throw new AppError(
+      `Table ${table.tableNumber} cannot accommodate ${guests} guests (Capacity: ${table.capacity}, Current Seated: ${currentOcc}, Available Seats: ${remainingCap}).`,
+      400,
+      { suggestedTables: suggested }
+    );
   }
 
   const session = await prisma.$transaction(async (tx) => {
     const newSession = await tx.tableSession.create({
       data: {
         tableId,
+        partyName: options.partyName || `Party of ${guests}`,
+        guestCount: guests,
         startedAt: new Date(),
       },
     });
 
     await tx.restaurantTable.update({
       where: { id: tableId },
-      data: { status: TableStatus.OCCUPIED },
+      data: {
+        status: TableStatus.OCCUPIED,
+        currentOccupancy: currentOcc + guests,
+      },
     });
 
     return newSession;
@@ -198,7 +247,12 @@ export async function openTableSession(tableId: string, franchiseId: string, cur
   return session;
 }
 
-export async function closeTableSession(tableId: string, franchiseId: string, currentUserId?: string) {
+export async function closeTableSession(
+  tableId: string,
+  franchiseId: string,
+  sessionId?: string,
+  currentUserId?: string
+) {
   const table = await prisma.restaurantTable.findUnique({
     where: { id: tableId },
     include: {
@@ -217,41 +271,50 @@ export async function closeTableSession(tableId: string, franchiseId: string, cu
     throw new AppError("Table not found", 404);
   }
 
-  const activeSession = table.sessions[0];
-  if (!activeSession) {
+  const sessionToClose = sessionId
+    ? table.sessions.find((s) => s.id === sessionId)
+    : table.sessions[0];
+
+  if (!sessionToClose) {
     await prisma.restaurantTable.update({
       where: { id: tableId },
-      data: { status: TableStatus.AVAILABLE },
+      data: { status: TableStatus.AVAILABLE, currentOccupancy: 0 },
     });
     return { success: true, message: "Table marked available" };
   }
 
-  if (activeSession.orders.length > 0) {
+  if (sessionToClose.orders.length > 0) {
     throw new AppError("Cannot close table session with active unpaid/unbilled orders", 400);
   }
 
   await prisma.$transaction(async (tx) => {
     await tx.tableSession.update({
-      where: { id: activeSession.id },
+      where: { id: sessionToClose.id },
       data: { endedAt: new Date() },
     });
 
+    const remainingActiveSessions = table.sessions.filter((s) => s.id !== sessionToClose.id);
+    const newOccupancy = Math.max(0, (table.currentOccupancy || 0) - sessionToClose.guestCount);
+    const newStatus = remainingActiveSessions.length === 0 ? TableStatus.AVAILABLE : TableStatus.OCCUPIED;
+
     await tx.restaurantTable.update({
       where: { id: tableId },
-      data: { status: TableStatus.AVAILABLE },
+      data: {
+        status: newStatus,
+        currentOccupancy: remainingActiveSessions.length === 0 ? 0 : newOccupancy,
+      },
     });
   });
 
-  emitToFranchise(franchiseId, "table:session_closed", { tableId, sessionId: activeSession.id });
-  emitToFranchise(franchiseId, "table:status_changed", { tableId, status: TableStatus.AVAILABLE });
+  emitToFranchise(franchiseId, "table:session_closed", { tableId, sessionId: sessionToClose.id });
 
   await logAudit({
     franchiseId,
     userId: currentUserId,
     action: "CLOSE_TABLE_SESSION",
     entity: "TableSession",
-    entityId: activeSession.id,
+    entityId: sessionToClose.id,
   });
 
-  return { success: true, message: "Table session closed and table is now available" };
+  return { success: true, message: "Table session closed" };
 }

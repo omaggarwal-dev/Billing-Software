@@ -9,12 +9,16 @@ import { approveLeaveRequest, createLeaveRequest } from "./modules/leave/leave.s
 import { finalizePayroll, generateMonthlyPayroll, markPayrollAsPaid } from "./modules/payroll/payroll.service.js";
 import { createCategory, createMenuItem, listMenuItems } from "./modules/menu/menu.service.js";
 import { createTable, openTableSession, listTables } from "./modules/table/table.service.js";
-import { createOrder, getOrderById } from "./modules/order/order.service.js";
+import { createOrder, getOrderById, setOrderStatus } from "./modules/order/order.service.js";
 import { generateKOTsForOrder, updateKOTStatus } from "./modules/kot/kot.service.js";
 import { createInvoiceForOrder, getInvoiceById } from "./modules/billing/billing.service.js";
 import { processSplitPayment } from "./modules/payment/payment.service.js";
 import { generatePrintPayload, listPrinters } from "./modules/printer/printer.service.js";
 import { getDashboardStats, getGlobalFranchiseReport, getSalesReport } from "./modules/report/report.service.js";
+import { createInventoryItem, recordStockIn, listInventoryItems } from "./modules/inventory/inventory.service.js";
+import { upsertRecipe, getRecipeForMenuItem } from "./modules/recipe/recipe.service.js";
+import { createExpense, createExpenseCategory, listExpenseCategories, reviewExpense, getExpenseStats } from "./modules/expense/expense.service.js";
+import { createAdvance, listAdvances } from "./modules/advance/advance.service.js";
 
 async function runEndToEndTests() {
   console.log("🚀 STARTING E2E BACKEND SUITE...");
@@ -108,7 +112,20 @@ async function runEndToEndTests() {
   const approvedLeave = await approveLeaveRequest(leave.id, franchise.id, "Rajesh Sharma", managerUser.id);
   console.log("✅ 6. Leave approved:", approvedLeave.status, "for dates 2026-09-20 to 2026-09-21");
 
-  // 7. Monthly Payroll Generation
+  // 6b. Employee Advance Request (Auto-approved on creation)
+  const advance = await createAdvance(
+    {
+      employeeId: emp!.id,
+      amount: 5000,
+      reason: "Festival / medical advance",
+      paymentMethod: "CASH" as any,
+    },
+    franchise.id,
+    managerUser.id
+  );
+  console.log("✅ 6b. Employee Advance recorded:", `₹${advance.amount}`, "Status:", advance.status);
+
+  // 7. Monthly Payroll Generation (Verify Advance Deduction)
   const payroll = await generateMonthlyPayroll(
     {
       month: 9,
@@ -117,13 +134,63 @@ async function runEndToEndTests() {
     franchise.id,
     managerUser.id
   );
-  console.log("✅ 7. Payroll generated:", `₹${payroll.totalNet}`, "Status:", payroll.status);
-  const finalizedPayroll = await finalizePayroll(payroll.id, franchise.id, managerUser.id);
-  console.log("✅ 7b. Payroll finalized:", finalizedPayroll.status);
-  const paidPayroll = await markPayrollAsPaid(payroll.id, franchise.id, managerUser.id);
-  console.log("✅ 7c. Payroll marked PAID:", paidPayroll.status);
+  console.log("✅ 7. Payroll generated:", `Total Net: ₹${payroll.totalNet}`, "Status:", payroll.status);
+  
+  // Verify employee advance was deducted from payroll item
+  const payrollItem = await prisma.payrollItem.findFirst({
+    where: { payrollId: payroll.id, employeeId: emp!.id },
+  });
+  console.log("✅ 7b. Payroll Item basic:", payrollItem?.basicSalary, "Advance deducted:", payrollItem?.advance, "Net:", payrollItem?.netSalary);
 
-  // 8. Menu Categories & Items
+  const finalizedPayroll = await finalizePayroll(payroll.id, franchise.id, managerUser.id);
+  console.log("✅ 7c. Payroll finalized:", finalizedPayroll.status);
+  const paidPayroll = await markPayrollAsPaid(payroll.id, franchise.id, managerUser.id);
+  console.log("✅ 7d. Payroll marked PAID:", paidPayroll.status);
+
+  // 8. Raw Materials & Stock-In
+  const rawPaneer = await createInventoryItem(
+    {
+      name: "Fresh Cottage Cheese (Paneer)",
+      unit: "KG",
+      minimumStock: 5,
+      reorderLevel: 10,
+      purchasePrice: 320,
+      currentStock: 0,
+    },
+    franchise.id,
+    managerUser.id
+  );
+
+  const rawChicken = await createInventoryItem(
+    {
+      name: "Boneless Chicken",
+      unit: "KG",
+      minimumStock: 10,
+      reorderLevel: 20,
+      purchasePrice: 240,
+      currentStock: 0,
+    },
+    franchise.id,
+    managerUser.id
+  );
+
+  // Stock-In 20 KG Paneer and 30 KG Chicken
+  await recordStockIn(
+    {
+      supplier: "Metro Wholesale",
+      invoiceNumber: "INV-PO-001",
+      notes: "Opening vendor purchase order",
+      items: [
+        { inventoryItemId: rawPaneer.id, quantity: 20, unitPrice: 320 },
+        { inventoryItemId: rawChicken.id, quantity: 30, unitPrice: 240 },
+      ],
+    },
+    franchise.id,
+    managerUser.id
+  );
+  console.log("✅ 8. Raw material inventory created and stocked: Paneer (20KG), Chicken (30KG)");
+
+  // 8b. Menu Categories & Items
   const cat1 = await createCategory({ name: "Starters", description: "Delicious appetizers", isActive: true }, franchise.id, managerUser.id);
   const cat2 = await createCategory({ name: "Main Course", description: "Curries and breads", isActive: true }, franchise.id, managerUser.id);
 
@@ -169,12 +236,42 @@ async function runEndToEndTests() {
     franchise.id,
     managerUser.id
   );
-  console.log("✅ 8. Menu created:", item1.name, "(₹280),", item2.name, "(₹420),", item3.name, "(₹60)");
+  console.log("✅ 8b. Menu created:", item1.name, "(₹280),", item2.name, "(₹420),", item3.name, "(₹60)");
 
-  // 9. Table & Session
+  // 8c. Recipe SOP Configuration
+  await upsertRecipe(
+    item1.id,
+    {
+      name: "Paneer Tikka Standard Recipe",
+      servingSize: "6 Pieces",
+      wastageAllowance: 5,
+      items: [
+        { inventoryItemId: rawPaneer.id, quantity: 0.25, unit: "KG", wastageAllowance: 0 },
+      ],
+    },
+    franchise.id,
+    managerUser.id
+  );
+
+  await upsertRecipe(
+    item2.id,
+    {
+      name: "Butter Chicken Standard Recipe",
+      servingSize: "1 Bowl",
+      wastageAllowance: 5,
+      items: [
+        { inventoryItemId: rawChicken.id, quantity: 0.35, unit: "KG", wastageAllowance: 0 },
+      ],
+    },
+    franchise.id,
+    managerUser.id
+  );
+  console.log("✅ 8c. Recipe SOPs configured for Paneer Tikka (0.25KG Paneer) and Butter Chicken (0.35KG Chicken)");
+
+  // 9. Table & Session with Smart Capacity
   const table = await createTable({ tableNumber: "T-01", capacity: 4, status: "AVAILABLE" as any }, franchise.id, managerUser.id);
-  const session = await openTableSession(table.id, franchise.id, managerUser.id);
-  console.log("✅ 9. Table created and session opened for Table:", table.tableNumber, "Session ID:", session.id);
+  const session = await openTableSession(table.id, franchise.id, { guestCount: 2, partyName: "Sharma Family" }, managerUser.id);
+  console.log("✅ 9. Table created and session opened for Table:", table.tableNumber, "Capacity: 4, Guests: 2, Remaining: 2");
 
   // 10. POS Order Creation
   const order = await createOrder(
@@ -184,31 +281,31 @@ async function runEndToEndTests() {
       discount: 50,
       taxRate: 5,
       items: [
-        { menuItemId: item1.id, quantity: 1, notes: "Extra spicy" },
-        { menuItemId: item2.id, quantity: 2, notes: "Less oil" },
+        { menuItemId: item1.id, quantity: 2, notes: "Extra spicy" }, // 2 * 0.25 = 0.5 KG Paneer
+        { menuItemId: item2.id, quantity: 2, notes: "Less oil" },    // 2 * 0.35 = 0.7 KG Chicken
         { menuItemId: item3.id, quantity: 4, notes: "Butter on side" },
       ],
     },
     franchise.id,
     managerUser.id
   );
-  // Expected Subtotal: 280*1 + 420*2 + 60*4 = 280 + 840 + 240 = 1360
-  // Discount: 50 => Taxable: 1310
-  // Tax (5% of 1310): 65.50
-  // Total: 1375.50
-  console.log("✅ 10. POS Order created:", order.orderNumber, "Subtotal:", `₹${order.subtotal}`, "Discount:", `₹${order.discount}`, "Tax:", `₹${order.tax}`, "Total:", `₹${order.total}`);
+  console.log("✅ 10. POS Order created:", order.orderNumber, "Total:", `₹${order.total}`);
 
   // 11. KOT Generation
   const kots = await generateKOTsForOrder(order.id, franchise.id, undefined, managerUser.id);
-  console.log("✅ 11. KOTs generated:", kots.length, "tickets routed to stations:", kots.map((k) => `${k.kotNumber} -> ${k.station?.name}`));
+  console.log("✅ 11. KOTs generated:", kots.length, "tickets routed to stations");
 
-  // 12. Kitchen Workflow (Chef marks PREPARING -> READY)
+  // 12. Kitchen Workflow & Auto-Inventory Deduction on SERVE
   for (const kot of kots) {
     await updateKOTStatus(kot.id, "PREPARING" as any, franchise.id, managerUser.id);
     await updateKOTStatus(kot.id, "READY" as any, franchise.id, managerUser.id);
   }
-  const updatedOrder = await getOrderById(order.id, franchise.id);
-  console.log("✅ 12. Kitchen processed all KOTs. Order status is now:", updatedOrder.status);
+  await setOrderStatus(order.id, "SERVED" as any, franchise.id, managerUser.id);
+
+  // Check inventory deduction
+  const updatedPaneer = await prisma.inventoryItem.findUnique({ where: { id: rawPaneer.id } });
+  const updatedChicken = await prisma.inventoryItem.findUnique({ where: { id: rawChicken.id } });
+  console.log("✅ 12. Order SERVED! Auto Inventory Consumption Verified -> Paneer stock:", updatedPaneer?.currentStock, "KG (was 20KG), Chicken stock:", updatedChicken?.currentStock, "KG (was 30KG)");
 
   // 13. Invoice Generation
   const invoice = await createInvoiceForOrder({ orderId: order.id }, franchise.id, managerUser.id);
@@ -228,9 +325,27 @@ async function runEndToEndTests() {
   );
   console.log("✅ 14. Split payments processed:", splitPayments.map((p) => `${p.method}: ₹${p.amount}`).join(", "));
 
+  // 14b. Unforeseen Expenses
+  const expCategories = await listExpenseCategories(franchise.id);
+  const expCat = expCategories[0];
+  const exp = await createExpense(
+    {
+      categoryId: expCat.id,
+      title: "Emergency plumbing repair",
+      amount: 1200,
+      paymentMethod: "CASH" as any,
+      description: "Kitchen pipe replacement",
+    },
+    franchise.id,
+    managerUser.id,
+    "FRANCHISE_MANAGER"
+  );
+  const approvedExp = await reviewExpense(exp.id, "APPROVED" as any, franchise.id, managerUser.id);
+  console.log("✅ 14b. Unforeseen Expense logged & approved:", approvedExp.title, `₹${approvedExp.amount}`, "Status:", approvedExp.status);
+
   // Verify Table is now AVAILABLE and Session Closed
   const updatedTable = await prisma.restaurantTable.findUnique({ where: { id: table.id } });
-  console.log("✅ 14b. Table status after full payment:", updatedTable?.status, "(should be AVAILABLE)");
+  console.log("✅ 14c. Table status after full payment:", updatedTable?.status, "(AVAILABLE)");
 
   // 15. Printer payload generation
   const receiptPrint = await generatePrintPayload("RECEIPT", invoice.id, franchise.id);

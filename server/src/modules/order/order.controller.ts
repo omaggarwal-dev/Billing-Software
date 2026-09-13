@@ -10,6 +10,7 @@ import {
   setOrderStatus,
   updateOrder,
   updateOrderSchema,
+  recordKOTDecision,
 } from "./order.service.js";
 import { AppError } from "../../middleware/error.js";
 
@@ -45,7 +46,7 @@ export async function create(req: AuthenticatedRequest, res: Response, next: Nex
     const franchiseId = getFranchiseId(req);
     if (!franchiseId) throw new AppError("Franchise ID is required", 400);
     const validated = createOrderSchema.parse(req.body);
-    const order = await createOrder(validated, franchiseId, req.user?.userId);
+    const order = await createOrder(validated, franchiseId, req.user?.id || req.user?.userId);
     return res.status(201).json({ success: true, data: order });
   } catch (error) {
     next(error);
@@ -58,7 +59,7 @@ export async function update(req: AuthenticatedRequest, res: Response, next: Nex
     const franchiseId = getFranchiseId(req);
     if (!franchiseId) throw new AppError("Franchise ID is required", 400);
     const validated = updateOrderSchema.parse(req.body);
-    const order = await updateOrder(id, validated, franchiseId, req.user?.userId);
+    const order = await updateOrder(id, validated, franchiseId, req.user?.id || req.user?.userId);
     return res.json({ success: true, data: order });
   } catch (error) {
     next(error);
@@ -70,7 +71,7 @@ export async function confirm(req: AuthenticatedRequest, res: Response, next: Ne
     const id = req.params.id as string;
     const franchiseId = getFranchiseId(req);
     if (!franchiseId) throw new AppError("Franchise ID is required", 400);
-    const order = await setOrderStatus(id, OrderStatus.CONFIRMED, franchiseId, req.user?.userId);
+    const order = await setOrderStatus(id, OrderStatus.CONFIRMED, franchiseId, req.user?.id || req.user?.userId);
     return res.json({ success: true, data: order });
   } catch (error) {
     next(error);
@@ -82,7 +83,7 @@ export async function cancel(req: AuthenticatedRequest, res: Response, next: Nex
     const id = req.params.id as string;
     const franchiseId = getFranchiseId(req);
     if (!franchiseId) throw new AppError("Franchise ID is required", 400);
-    const order = await setOrderStatus(id, OrderStatus.CANCELLED, franchiseId, req.user?.userId);
+    const order = await setOrderStatus(id, OrderStatus.CANCELLED, franchiseId, req.user?.id || req.user?.userId);
     return res.json({ success: true, data: order });
   } catch (error) {
     next(error);
@@ -94,7 +95,20 @@ export async function serve(req: AuthenticatedRequest, res: Response, next: Next
     const id = req.params.id as string;
     const franchiseId = getFranchiseId(req);
     if (!franchiseId) throw new AppError("Franchise ID is required", 400);
-    const order = await setOrderStatus(id, OrderStatus.SERVED, franchiseId, req.user?.userId);
+    const order = await setOrderStatus(id, OrderStatus.SERVED, franchiseId, req.user?.id || req.user?.userId);
+    return res.json({ success: true, data: order });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function kotDecision(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const id = req.params.id as string;
+    const franchiseId = getFranchiseId(req);
+    if (!franchiseId) throw new AppError("Franchise ID is required", 400);
+    const decision = req.body.decision as "SENT" | "SKIPPED";
+    const order = await recordKOTDecision(id, decision, franchiseId, req.user?.id || req.user?.userId);
     return res.json({ success: true, data: order });
   } catch (error) {
     next(error);

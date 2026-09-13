@@ -18,6 +18,10 @@ import {
   ShieldCheck,
   LogOut,
   Store,
+  Package,
+  BookOpen,
+  WalletCards,
+  HandCoins,
 } from "lucide-react";
 import { useAuthStore } from "../../store/authStore.js";
 
@@ -66,10 +70,28 @@ const navItems: NavItem[] = [
     roles: ["FRANCHISE_MANAGER", "CASHIER", "ACCOUNTANT"],
   },
   {
+    name: "Inventory & Stock",
+    to: "/inventory",
+    icon: <Package className="w-5 h-5" />,
+    roles: ["SUPER_ADMIN", "FRANCHISE_MANAGER", "CHEF", "ACCOUNTANT"],
+  },
+  {
+    name: "Recipes & SOP",
+    to: "/recipes",
+    icon: <BookOpen className="w-5 h-5" />,
+    roles: ["SUPER_ADMIN", "FRANCHISE_MANAGER", "CHEF"],
+  },
+  {
     name: "Menu & Categories",
     to: "/menu",
     icon: <UtensilsCrossed className="w-5 h-5" />,
-    roles: ["FRANCHISE_MANAGER", "CHEF"],
+    roles: ["SUPER_ADMIN", "FRANCHISE_MANAGER", "CHEF"],
+  },
+  {
+    name: "Unforeseen Expenses",
+    to: "/expenses",
+    icon: <WalletCards className="w-5 h-5" />,
+    roles: ["FRANCHISE_MANAGER", "CASHIER", "ACCOUNTANT"],
   },
   {
     name: "Franchises",
@@ -100,6 +122,12 @@ const navItems: NavItem[] = [
     to: "/leave",
     icon: <CalendarDays className="w-5 h-5" />,
     roles: ["FRANCHISE_MANAGER", "HR"],
+  },
+  {
+    name: "Employee Advances",
+    to: "/advances",
+    icon: <HandCoins className="w-5 h-5" />,
+    roles: ["FRANCHISE_MANAGER", "CASHIER", "HR", "ACCOUNTANT"],
   },
   {
     name: "Payroll",

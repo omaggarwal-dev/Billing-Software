@@ -22,6 +22,10 @@ import { BillingPage } from "../pages/billing/BillingPage.js";
 import { PrintersPage } from "../pages/printers/PrintersPage.js";
 import { ReportsPage } from "../pages/reports/ReportsPage.js";
 import { AuditLogsPage } from "../pages/audit/AuditLogsPage.js";
+import { InventoryPage } from "../pages/inventory/InventoryPage.js";
+import { RecipesPage } from "../pages/recipes/RecipesPage.js";
+import { ExpensesPage } from "../pages/expenses/ExpensesPage.js";
+import { AdvancesPage } from "../pages/advances/AdvancesPage.js";
 
 function RootRedirect() {
   const { user, isAuthenticated } = useAuthStore();
@@ -104,6 +108,42 @@ export const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute allowedRoles={["SUPER_ADMIN", "FRANCHISE_MANAGER", "CHEF"]}>
               <MenuPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/inventory"
+          element={
+            <ProtectedRoute allowedRoles={["SUPER_ADMIN", "FRANCHISE_MANAGER", "CHEF", "ACCOUNTANT"]}>
+              <InventoryPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/recipes"
+          element={
+            <ProtectedRoute allowedRoles={["SUPER_ADMIN", "FRANCHISE_MANAGER", "CHEF"]}>
+              <RecipesPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/expenses"
+          element={
+            <ProtectedRoute allowedRoles={["FRANCHISE_MANAGER", "CASHIER", "ACCOUNTANT"]}>
+              <ExpensesPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/advances"
+          element={
+            <ProtectedRoute allowedRoles={["FRANCHISE_MANAGER", "CASHIER", "HR", "ACCOUNTANT"]}>
+              <AdvancesPage />
             </ProtectedRoute>
           }
         />
