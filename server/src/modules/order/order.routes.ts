@@ -1,17 +1,111 @@
 import { Router } from "express";
-import { authenticate, authorize } from "../../middleware/auth.js";
-import { cancel, confirm, create, get, list, serve, update } from "./order.controller.js";
+import { authenticate, authorizeRole } from "../../middleware/auth.js";
+import { UserRole } from "@prisma/client";
+import {
+  cancel,
+  confirm,
+  create,
+  get,
+  list,
+  serve,
+  update,
+  kotDecision,
+} from "./order.controller.js";
 
 const router = Router();
 
 router.use(authenticate);
 
-router.get("/", authorize("SUPER_ADMIN", "FRANCHISE_MANAGER", "CASHIER", "WAITER", "CHEF", "ACCOUNTANT"), list);
-router.get("/:id", authorize("SUPER_ADMIN", "FRANCHISE_MANAGER", "CASHIER", "WAITER", "CHEF", "ACCOUNTANT"), get);
-router.post("/", authorize("SUPER_ADMIN", "FRANCHISE_MANAGER", "CASHIER", "WAITER"), create);
-router.put("/:id", authorize("SUPER_ADMIN", "FRANCHISE_MANAGER", "CASHIER", "WAITER"), update);
-router.post("/:id/confirm", authorize("SUPER_ADMIN", "FRANCHISE_MANAGER", "CASHIER", "WAITER"), confirm);
-router.post("/:id/cancel", authorize("SUPER_ADMIN", "FRANCHISE_MANAGER", "CASHIER"), cancel);
-router.post("/:id/serve", authorize("SUPER_ADMIN", "FRANCHISE_MANAGER", "CASHIER", "WAITER", "CHEF"), serve);
+router.get(
+  "/",
+  authorizeRole(
+    UserRole.SUPER_ADMIN,
+    UserRole.FRANCHISE_MANAGER,
+    UserRole.CASHIER,
+    UserRole.CHEF,
+    UserRole.WAITER,
+    UserRole.ACCOUNTANT
+  ),
+  list
+);
+
+router.get(
+  "/:id",
+  authorizeRole(
+    UserRole.SUPER_ADMIN,
+    UserRole.FRANCHISE_MANAGER,
+    UserRole.CASHIER,
+    UserRole.CHEF,
+    UserRole.WAITER,
+    UserRole.ACCOUNTANT
+  ),
+  get
+);
+
+router.post(
+  "/",
+  authorizeRole(
+    UserRole.SUPER_ADMIN,
+    UserRole.FRANCHISE_MANAGER,
+    UserRole.CASHIER,
+    UserRole.WAITER
+  ),
+  create
+);
+
+router.put(
+  "/:id",
+  authorizeRole(
+    UserRole.SUPER_ADMIN,
+    UserRole.FRANCHISE_MANAGER,
+    UserRole.CASHIER,
+    UserRole.WAITER
+  ),
+  update
+);
+
+router.patch(
+  "/:id/confirm",
+  authorizeRole(
+    UserRole.SUPER_ADMIN,
+    UserRole.FRANCHISE_MANAGER,
+    UserRole.CASHIER,
+    UserRole.WAITER
+  ),
+  confirm
+);
+
+router.patch(
+  "/:id/cancel",
+  authorizeRole(
+    UserRole.SUPER_ADMIN,
+    UserRole.FRANCHISE_MANAGER,
+    UserRole.CASHIER
+  ),
+  cancel
+);
+
+router.patch(
+  "/:id/serve",
+  authorizeRole(
+    UserRole.SUPER_ADMIN,
+    UserRole.FRANCHISE_MANAGER,
+    UserRole.CHEF,
+    UserRole.WAITER,
+    UserRole.CASHIER
+  ),
+  serve
+);
+
+router.patch(
+  "/:id/kot-decision",
+  authorizeRole(
+    UserRole.SUPER_ADMIN,
+    UserRole.FRANCHISE_MANAGER,
+    UserRole.CASHIER,
+    UserRole.WAITER
+  ),
+  kotDecision
+);
 
 export default router;

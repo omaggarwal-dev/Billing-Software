@@ -19,6 +19,11 @@ import paymentRoutes from "./modules/payment/payment.routes.js";
 import printerRoutes from "./modules/printer/printer.routes.js";
 import reportRoutes from "./modules/report/report.routes.js";
 import auditRoutes from "./modules/audit/audit.routes.js";
+import inventoryRoutes from "./modules/inventory/inventory.routes.js";
+import recipeRoutes from "./modules/recipe/recipe.routes.js";
+import expenseRoutes from "./modules/expense/expense.routes.js";
+import advanceRoutes from "./modules/advance/advance.routes.js";
+import notificationRoutes from "./modules/notification/notification.routes.js";
 
 import { initSocket } from "./lib/socket.js";
 import { errorHandler } from "./middleware/error.js";
@@ -35,12 +40,7 @@ initSocket(server);
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow localhost on any port, Vite dev server, or direct tools
-      if (!origin || origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) {
-        callback(null, true);
-      } else {
-        callback(null, true);
-      }
+      callback(null, true);
     },
     credentials: true,
   })
@@ -91,6 +91,11 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/printers", printerRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/audit-logs", auditRoutes);
+app.use("/api/inventory", inventoryRoutes);
+app.use("/api/recipes", recipeRoutes);
+app.use("/api/expenses", expenseRoutes);
+app.use("/api/advances", advanceRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // Centralized error handler
 app.use(errorHandler);
@@ -98,7 +103,5 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, () => {
-  console.log(`Restaurant Management API running on http://localhost:${PORT}`);
+  console.log(`Server listening on port ${PORT}`);
 });
-
-export default app;

@@ -7,6 +7,7 @@ import {
   getTableById,
   listTables,
   openTableSession,
+  openSessionSchema,
   tableSchema,
   updateTable,
   updateTableSchema,
@@ -39,7 +40,7 @@ export async function create(req: AuthenticatedRequest, res: Response, next: Nex
     const franchiseId = getFranchiseId(req);
     if (!franchiseId) throw new AppError("Franchise ID is required", 400);
     const validated = tableSchema.parse(req.body);
-    const table = await createTable(validated, franchiseId, req.user?.userId);
+    const table = await createTable(validated, franchiseId, req.user?.id || req.user?.userId);
     return res.status(201).json({ success: true, data: table });
   } catch (error) {
     next(error);
@@ -52,7 +53,7 @@ export async function update(req: AuthenticatedRequest, res: Response, next: Nex
     const franchiseId = getFranchiseId(req);
     if (!franchiseId) throw new AppError("Franchise ID is required", 400);
     const validated = updateTableSchema.parse(req.body);
-    const table = await updateTable(id, validated, franchiseId, req.user?.userId);
+    const table = await updateTable(id, validated, franchiseId, req.user?.id || req.user?.userId);
     return res.json({ success: true, data: table });
   } catch (error) {
     next(error);
@@ -64,7 +65,9 @@ export async function openSession(req: AuthenticatedRequest, res: Response, next
     const id = req.params.id as string;
     const franchiseId = getFranchiseId(req);
     if (!franchiseId) throw new AppError("Franchise ID is required", 400);
-    const session = await openTableSession(id, franchiseId, req.user?.userId);
+    const parsed = openSessionSchema.safeParse(req.body);
+    const options = parsed.success ? parsed.data : { guestCount: req.body.guestCount || 1, partyName: req.body.partyName };
+    const session = await openTableSession(id, franchiseId, options, req.user?.id || req.user?.userId);
     return res.json({ success: true, data: session });
   } catch (error) {
     next(error);
@@ -76,7 +79,8 @@ export async function closeSession(req: AuthenticatedRequest, res: Response, nex
     const id = req.params.id as string;
     const franchiseId = getFranchiseId(req);
     if (!franchiseId) throw new AppError("Franchise ID is required", 400);
-    const result = await closeTableSession(id, franchiseId, req.user?.userId);
+    const sessionId = (req.body.sessionId || req.query.sessionId) as string | undefined;
+    const result = await closeTableSession(id, franchiseId, sessionId, req.user?.id || req.user?.userId);
     return res.json({ success: true, data: result });
   } catch (error) {
     next(error);

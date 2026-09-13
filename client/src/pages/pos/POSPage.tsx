@@ -11,6 +11,10 @@ import {
   Minus,
   UtensilsCrossed,
   AlertCircle,
+  Users,
+  CheckCircle2,
+  XCircle,
+  HelpCircle,
 } from "lucide-react";
 import { api, extractErrorMessage } from "../../services/api.js";
 import { useAuthStore } from "../../store/authStore.js";
@@ -46,6 +50,18 @@ export const POSPage: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<string>("");
   const [posError, setPosError] = useState<string | null>(null);
 
+  // Table Seating & Party Size State
+  const [partyName, setPartyName] = useState("");
+  const [guestCount, setGuestCount] = useState<number>(2);
+  const [showCapacityWarning, setShowCapacityWarning] = useState(false);
+  const [suggestedTables, setSuggestedTables] = useState<RestaurantTable[]>([]);
+  const [pendingTableSelection, setPendingTableSelection] = useState<RestaurantTable | null>(null);
+
+  // Post-Payment KOT Modal State
+  const [postPaymentOrder, setPostPaymentOrder] = useState<any | null>(null);
+  const [postPaymentInvoice, setPostPaymentInvoice] = useState<any | null>(null);
+  const [showKotModal, setShowKotModal] = useState(false);
+
   // Fetch Tables
   const { data: tables = [] } = useQuery<RestaurantTable[]>({
     queryKey: ["tables", selectedFranchiseId],
@@ -73,6 +89,29 @@ export const POSPage: React.FC = () => {
     },
   });
 
+  // Handle Smart Table Selection with capacity check
+  const handleTableChange = (tableId: string) => {
+    if (!tableId) {
+      setSelectedTable(null);
+      return;
+    }
+
+    const table = tables.find((t) => t.id === tableId);
+    if (!table) return;
+
+    const remainingSeats = table.capacity - (table.currentOccupancy || 0);
+    if (guestCount > remainingSeats) {
+      const alternatives = tables.filter(
+        (t) => t.id !== table.id && (t.capacity - (t.currentOccupancy || 0)) >= guestCount
+      );
+      setSuggestedTables(alternatives);
+      setPendingTableSelection(table);
+      setShowCapacityWarning(true);
+    } else {
+      setSelectedTable(table);
+    }
+  };
+
   // Place Order & Send KOT Mutation
   const placeOrderAndKOTMutation = useMutation({
     mutationFn: async () => {
@@ -82,6 +121,9 @@ export const POSPage: React.FC = () => {
         tableId: selectedTable?.id || null,
         discount,
         taxRate,
+        partyName: partyName || undefined,
+        guestCount: guestCount || undefined,
+        kotDecision: "SENT",
         items: cartItems.map((i) => ({
           menuItemId: i.menuItem.id,
           quantity: i.quantity,
@@ -108,7 +150,7 @@ export const POSPage: React.FC = () => {
     },
   });
 
-  // Instant Bill & Checkout Mutation
+  // Direct Bill & Ask KOT Decision Mutation
   const directBillMutation = useMutation({
     mutationFn: async () => {
       if (cartItems.length === 0) throw new Error("Order cart is empty");
@@ -117,6 +159,8 @@ export const POSPage: React.FC = () => {
         tableId: selectedTable?.id || null,
         discount,
         taxRate,
+        partyName: partyName || undefined,
+        guestCount: guestCount || undefined,
         items: cartItems.map((i) => ({
           menuItemId: i.menuItem.id,
           quantity: i.quantity,
@@ -127,24 +171,36 @@ export const POSPage: React.FC = () => {
       const orderRes = await api.post("/orders", payload);
       const createdOrder = orderRes.data.data;
 
-      // Generate KOT
-      await api.post("/kot/generate", { orderId: createdOrder.id });
-
       // Generate Invoice
       const invoiceRes = await api.post("/billing/invoices", { orderId: createdOrder.id });
-      return invoiceRes.data.data;
+      return { order: createdOrder, invoice: invoiceRes.data.data };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
       queryClient.invalidateQueries({ queryKey: ["tables"] });
-      clearCart();
-      navigate("/billing");
+      setPostPaymentOrder(data.order);
+      setPostPaymentInvoice(data.invoice);
+      setShowKotModal(true);
     },
     onError: (err) => {
       setPosError(extractErrorMessage(err));
     },
   });
+
+  const handleKotDecision = async (sendKot: boolean) => {
+    try {
+      if (sendKot && postPaymentOrder) {
+        await api.post("/kot/generate", { orderId: postPaymentOrder.id });
+      }
+    } catch (err) {
+      console.error("KOT decision error:", err);
+    } finally {
+      setShowKotModal(false);
+      clearCart();
+      navigate("/billing");
+    }
+  };
 
   const filteredItems = menuItems.filter((item) => {
     const matchesCategory = activeCategory ? item.categoryId === activeCategory : true;
@@ -172,23 +228,48 @@ export const POSPage: React.FC = () => {
             className="w-full sm:max-w-xs"
           />
 
-          {/* Table Selector */}
-          <div className="w-full sm:w-auto flex-1 flex items-center gap-2">
-            <Select
-              options={[
-                { value: "", label: "🛍️ Takeaway / Direct Counter" },
-                ...tables.map((t) => ({
-                  value: t.id,
-                  label: `🪑 Table ${t.tableNumber} (${t.status})`,
-                })),
-              ]}
-              value={selectedTable?.id || ""}
-              onChange={(e) => {
-                const found = tables.find((t) => t.id === e.target.value);
-                setSelectedTable(found || null);
-              }}
-              className="w-full font-semibold"
-            />
+          {/* Table Selector & Guests */}
+          <div className="w-full sm:w-auto flex-1 flex flex-wrap items-center gap-2">
+            <div className="flex-1 min-w-[180px]">
+              <Select
+                options={[
+                  { value: "", label: "🛍️ Takeaway / Direct Counter" },
+                  ...tables.map((t) => ({
+                    value: t.id,
+                    label: `🪑 Table ${t.tableNumber} (${t.currentOccupancy || 0}/${t.capacity} seated - ${t.status})`,
+                  })),
+                ]}
+                value={selectedTable?.id || ""}
+                onChange={(e) => handleTableChange(e.target.value)}
+                className="w-full font-semibold"
+              />
+            </div>
+
+            {selectedTable && (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 bg-gray-100 px-2 py-1.5 rounded-lg text-xs">
+                  <Users className="w-3.5 h-3.5 text-gray-500" />
+                  <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={guestCount}
+                    onChange={(e) => setGuestCount(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-10 text-center font-bold bg-white border border-gray-300 rounded text-xs py-0.5"
+                    title="Party Size / Guests"
+                  />
+                  <span className="text-gray-500 font-medium">Guests</span>
+                </div>
+
+                <input
+                  type="text"
+                  placeholder="Party Name (opt)"
+                  value={partyName}
+                  onChange={(e) => setPartyName(e.target.value)}
+                  className="w-28 text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -421,6 +502,120 @@ export const POSPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Table Capacity Warning Modal */}
+      {showCapacityWarning && pendingTableSelection && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-3 text-amber-600">
+              <AlertCircle className="w-7 h-7 shrink-0" />
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Table Capacity Alert</h3>
+                <p className="text-xs text-gray-500">
+                  Party size ({guestCount} guests) exceeds Table {pendingTableSelection.tableNumber}'s remaining capacity ({pendingTableSelection.capacity - (pendingTableSelection.currentOccupancy || 0)} seats free).
+                </p>
+              </div>
+            </div>
+
+            {suggestedTables.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-700">Recommended Alternative Tables:</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {suggestedTables.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => {
+                        setSelectedTable(t);
+                        setShowCapacityWarning(false);
+                        setPendingTableSelection(null);
+                      }}
+                      className="p-2.5 text-left border border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100 rounded-xl transition-colors cursor-pointer"
+                    >
+                      <p className="text-xs font-bold text-indigo-950">Table {t.tableNumber}</p>
+                      <p className="text-[11px] text-indigo-600">
+                        {t.capacity - (t.currentOccupancy || 0)} free / {t.capacity} total
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
+                No single empty table has enough seats for {guestCount} guests.
+              </p>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setShowCapacityWarning(false);
+                  setPendingTableSelection(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setSelectedTable(pendingTableSelection);
+                  setShowCapacityWarning(false);
+                  setPendingTableSelection(null);
+                }}
+              >
+                Seat Anyway (Shared Seating)
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Post-Payment KOT Prompt Modal */}
+      {showKotModal && postPaymentOrder && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-7 h-7" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">Order & Invoice Generated!</h3>
+              <p className="text-xs text-gray-500">
+                Invoice #{postPaymentInvoice?.invoiceNumber || 'INV-001'} for ₹{postPaymentInvoice?.totalAmount || total} is ready.
+              </p>
+            </div>
+
+            <div className="p-4 bg-amber-50/80 border border-amber-200 rounded-xl space-y-1">
+              <div className="flex items-center gap-2 text-amber-800 font-bold text-sm">
+                <HelpCircle className="w-4 h-4" />
+                <span>Send KOT to Kitchen?</span>
+              </div>
+              <p className="text-xs text-amber-700">
+                Would you like to dispatch this ticket directly to the Kitchen Display System (KOT)?
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                onClick={() => handleKotDecision(false)}
+                className="w-full py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <XCircle className="w-4 h-4 text-gray-500" />
+                Don't Send (Prepared)
+              </button>
+
+              <button
+                onClick={() => handleKotDecision(true)}
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <ChefHat className="w-4 h-4" />
+                Send KOT to Kitchen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

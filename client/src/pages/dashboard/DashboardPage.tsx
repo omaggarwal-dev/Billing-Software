@@ -208,35 +208,35 @@ export const DashboardPage: React.FC = () => {
           >
             <div className="grid grid-cols-2 gap-3">
               <Link to="/pos">
-                <div className="p-4 rounded-xl border border-indigo-100 bg-indigo-50/50 hover:bg-indigo-50 text-indigo-700 font-semibold text-sm flex flex-col items-center justify-center text-center transition-all cursor-pointer">
-                  <ShoppingCart className="w-6 h-6 mb-2" />
+                <div className="p-3.5 rounded-xl border border-indigo-100 bg-indigo-50/50 hover:bg-indigo-50 text-indigo-700 font-semibold text-xs flex flex-col items-center justify-center text-center transition-all cursor-pointer">
+                  <ShoppingCart className="w-5 h-5 mb-1.5" />
                   <span>POS Billing</span>
                 </div>
               </Link>
               <Link to="/kitchen">
-                <div className="p-4 rounded-xl border border-amber-100 bg-amber-50/50 hover:bg-amber-50 text-amber-700 font-semibold text-sm flex flex-col items-center justify-center text-center transition-all cursor-pointer">
-                  <ChefHat className="w-6 h-6 mb-2" />
-                  <span>Kitchen Display</span>
+                <div className="p-3.5 rounded-xl border border-amber-100 bg-amber-50/50 hover:bg-amber-50 text-amber-700 font-semibold text-xs flex flex-col items-center justify-center text-center transition-all cursor-pointer">
+                  <ChefHat className="w-5 h-5 mb-1.5" />
+                  <span>Kitchen (KDS)</span>
                 </div>
               </Link>
-              <Link to="/tables">
-                <div className="p-4 rounded-xl border border-emerald-100 bg-emerald-50/50 hover:bg-emerald-50 text-emerald-700 font-semibold text-sm flex flex-col items-center justify-center text-center transition-all cursor-pointer">
-                  <Grid3X3 className="w-6 h-6 mb-2" />
-                  <span>Floor Tables</span>
+              <Link to="/inventory">
+                <div className="p-3.5 rounded-xl border border-emerald-100 bg-emerald-50/50 hover:bg-emerald-50 text-emerald-700 font-semibold text-xs flex flex-col items-center justify-center text-center transition-all cursor-pointer">
+                  <Grid3X3 className="w-5 h-5 mb-1.5" />
+                  <span>Inventory</span>
                 </div>
               </Link>
-              <Link to="/payroll">
-                <div className="p-4 rounded-xl border border-purple-100 bg-purple-50/50 hover:bg-purple-50 text-purple-700 font-semibold text-sm flex flex-col items-center justify-center text-center transition-all cursor-pointer">
-                  <Banknote className="w-6 h-6 mb-2" />
-                  <span>Payroll</span>
+              <Link to="/expenses">
+                <div className="p-3.5 rounded-xl border border-rose-100 bg-rose-50/50 hover:bg-rose-50 text-rose-700 font-semibold text-xs flex flex-col items-center justify-center text-center transition-all cursor-pointer">
+                  <Banknote className="w-5 h-5 mb-1.5" />
+                  <span>Expenses</span>
                 </div>
               </Link>
             </div>
           </Card>
 
           <Card
-            title="Shift & Attendance"
-            subtitle="Daily staff check-ins and workforce status"
+            title="Shift & Workforce"
+            subtitle="Daily staff check-ins and attendance"
             className="md:col-span-2"
             action={
               <Link to="/attendance">
@@ -246,20 +246,27 @@ export const DashboardPage: React.FC = () => {
               </Link>
             }
           >
-            <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
+            <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-gray-900">
-                  {stats?.presentStaffCount || 0} Employees Checked In Today
+                  {stats?.presentStaffCount || 0} Employees Active Today
                 </p>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Ensure all floor staff, chefs and cashiers record daily check-in
+                  Track live attendance, shift rosters, and employee advance requests
                 </p>
               </div>
-              <Link to="/attendance">
-                <Button variant="primary" size="sm">
-                  Mark Attendance
-                </Button>
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link to="/advances">
+                  <Button variant="secondary" size="sm">
+                    Advances
+                  </Button>
+                </Link>
+                <Link to="/attendance">
+                  <Button variant="primary" size="sm">
+                    Mark Attendance
+                  </Button>
+                </Link>
+              </div>
             </div>
           </Card>
         </div>

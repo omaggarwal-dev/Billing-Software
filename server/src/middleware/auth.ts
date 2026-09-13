@@ -7,6 +7,7 @@ function getJwtSecret() {
 
 export interface AuthenticatedUser {
   userId: string;
+  id?: string;
   role: string;
   franchiseId: string | null;
 }
@@ -40,7 +41,13 @@ export function authenticate(
       });
     }
 
-    req.user = decoded as AuthenticatedUser;
+    const payload = decoded as any;
+    req.user = {
+      userId: payload.userId || payload.id,
+      id: payload.userId || payload.id,
+      role: payload.role,
+      franchiseId: payload.franchiseId,
+    };
     next();
   } catch {
     return res.status(401).json({
@@ -62,32 +69,13 @@ export function authorize(...roles: string[]) {
   };
 }
 
-/**
- * Resolves the effective franchiseId for the request:
- * - If user is SUPER_ADMIN, allows query/body/header franchiseId override, or null if omitted (to view all).
- * - For all other roles, ALWAYS uses the authenticated user's franchiseId.
- */
-export function getFranchiseId(req: AuthenticatedRequest, explicitFranchiseId?: string | null): string | null {
+export const authorizeRole = authorize;
+
+export function getFranchiseId(req: AuthenticatedRequest): string | null {
   if (req.user?.role === "SUPER_ADMIN") {
-    if (explicitFranchiseId) return explicitFranchiseId;
-    const fromQuery = req.query.franchiseId as string | undefined;
-    const fromBody = req.body?.franchiseId as string | undefined;
-    const fromHeader = req.headers["x-franchise-id"] as string | undefined;
-    return fromQuery || fromBody || fromHeader || null;
+    const headerFranchise = req.headers["x-franchise-id"];
+    if (typeof headerFranchise === "string") return headerFranchise;
+    return req.user.franchiseId ?? null;
   }
   return req.user?.franchiseId ?? null;
-}
-
-/**
- * Enforces that a franchiseId is present and resolved.
- */
-export function requireFranchise(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  const franchiseId = getFranchiseId(req);
-  if (!franchiseId) {
-    return res.status(400).json({
-      success: false,
-      message: "A franchise ID is required for this operation",
-    });
-  }
-  next();
 }

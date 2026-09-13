@@ -38,6 +38,8 @@ export function getIO(): SocketIOServer | null {
   return io;
 }
 
+export const getSocket = getIO;
+
 export function emitToFranchise(franchiseId: string, event: string, data: unknown) {
   if (io && franchiseId) {
     io.to(`franchise:${franchiseId}`).emit(event, data);

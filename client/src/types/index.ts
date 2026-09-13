@@ -27,6 +27,27 @@ export type PayrollStatus = "DRAFT" | "FINALIZED" | "PAID";
 
 export type PrinterType = "KOT" | "RECEIPT" | "BAR" | "KITCHEN" | "DESSERT" | "OTHER";
 
+export type ExpenseStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export type AdvanceStatus = "PENDING" | "APPROVED" | "REJECTED" | "DEDUCTED";
+
+export type InventoryTxType =
+  | "PURCHASE"
+  | "CONSUMPTION"
+  | "WASTAGE"
+  | "ADJUSTMENT"
+  | "RETURN"
+  | "REVERSAL"
+  | "OPENING_STOCK";
+
+export type NotificationType =
+  | "LOW_STOCK"
+  | "CRITICAL_STOCK"
+  | "EXPENSE_SUBMITTED"
+  | "PAYROLL_ADVANCE"
+  | "KOT_READY"
+  | "INFO";
+
 export interface Franchise {
   id: string;
   name: string;
@@ -127,6 +148,28 @@ export interface LeaveRequest {
   };
 }
 
+export interface EmployeeAdvance {
+  id: string;
+  franchiseId: string;
+  employeeId: string;
+  amount: number | string;
+  reason?: string | null;
+  paymentMethod: PaymentMethod;
+  status: AdvanceStatus;
+  advanceDate: string;
+  approvedBy?: string | null;
+  notes?: string | null;
+  payrollId?: string | null;
+  createdAt: string;
+  employee?: {
+    id: string;
+    employeeCode: string;
+    firstName: string;
+    lastName?: string | null;
+    designation?: string | null;
+  };
+}
+
 export interface PayrollItem {
   id: string;
   payrollId: string;
@@ -137,6 +180,7 @@ export interface PayrollItem {
   bonus: number | string;
   deductions: number | string;
   advance: number | string;
+  advancesDeducted?: number | string;
   netSalary: number | string;
   employee?: {
     id: string;
@@ -159,6 +203,124 @@ export interface Payroll {
   createdAt: string;
   items?: PayrollItem[];
   _count?: { items?: number };
+}
+
+export interface ExpenseCategory {
+  id: string;
+  franchiseId: string;
+  name: string;
+  description?: string | null;
+}
+
+export interface Expense {
+  id: string;
+  franchiseId: string;
+  categoryId: string;
+  title: string;
+  description?: string | null;
+  amount: number | string;
+  paymentMethod: PaymentMethod;
+  status: ExpenseStatus;
+  recordedBy?: string | null;
+  approvedBy?: string | null;
+  expenseDate: string;
+  receiptUrl?: string | null;
+  notes?: string | null;
+  category?: ExpenseCategory;
+}
+
+export interface ExpenseStats {
+  thisMonthApproved: number;
+  pendingCount: number;
+  monthlyTotal: number;
+  totalApproved: number;
+}
+
+export interface InventoryStats {
+  totalItems: number;
+  totalValue: number;
+  lowStockCount: number;
+  criticalStockCount: number;
+}
+
+export interface InventoryItem {
+  id: string;
+  franchiseId: string;
+  name: string;
+  code?: string | null;
+  category?: string | null;
+  unit: string;
+  currentStock: number | string;
+  minimumStock: number | string;
+  reorderLevel: number | string;
+  purchasePrice: number | string;
+  supplier?: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface InventoryTransaction {
+  id: string;
+  franchiseId: string;
+  inventoryItemId: string;
+  type: InventoryTxType;
+  quantity: number | string;
+  previousStock: number | string;
+  newStock: number | string;
+  unitPrice?: number | string | null;
+  referenceType?: string | null;
+  referenceId?: string | null;
+  notes?: string | null;
+  performedBy?: string | null;
+  createdAt: string;
+  inventoryItem?: InventoryItem;
+}
+
+export interface PurchaseItem {
+  id: string;
+  purchaseId: string;
+  inventoryItemId: string;
+  quantity: number | string;
+  unitPrice: number | string;
+  totalPrice: number | string;
+  inventoryItem?: InventoryItem;
+}
+
+export interface Purchase {
+  id: string;
+  franchiseId: string;
+  invoiceNumber: string;
+  supplier: string;
+  totalAmount: number | string;
+  receivedDate: string;
+  receivedBy?: string | null;
+  notes?: string | null;
+  status: string;
+  createdAt: string;
+  items?: PurchaseItem[];
+}
+
+export interface RecipeItem {
+  id: string;
+  recipeId: string;
+  inventoryItemId: string;
+  quantity: number | string;
+  unit: string;
+  wastageAllowance?: number | string;
+  inventoryItem?: InventoryItem;
+}
+
+export interface Recipe {
+  id: string;
+  franchiseId: string;
+  menuItemId: string;
+  name: string;
+  prepInstructions?: string | null;
+  servingSize?: string | null;
+  wastageAllowance: number | string;
+  isActive: boolean;
+  items: RecipeItem[];
+  menuItem?: MenuItem;
 }
 
 export interface Category {
@@ -190,11 +352,15 @@ export interface MenuItem {
   isAvailable: boolean;
   category?: { id: string; name: string };
   station?: { id: string; name: string } | null;
+  recipe?: Recipe | null;
 }
 
 export interface TableSession {
   id: string;
   tableId: string;
+  partyName?: string | null;
+  guestCount: number;
+  status: string;
   startedAt: string;
   endedAt?: string | null;
   orders?: Order[];
@@ -205,6 +371,8 @@ export interface RestaurantTable {
   franchiseId: string;
   tableNumber: string;
   capacity: number;
+  currentOccupancy: number;
+  remainingCapacity?: number;
   status: TableStatus;
   sessions?: TableSession[];
 }
@@ -217,6 +385,7 @@ export interface OrderItem {
   unitPrice: number | string;
   totalPrice: number | string;
   notes?: string | null;
+  inventoryDeducted?: boolean;
   menuItem: MenuItem;
 }
 
@@ -225,6 +394,11 @@ export interface Order {
   franchiseId: string;
   tableSessionId?: string | null;
   orderNumber: string;
+  partyName?: string | null;
+  guestCount?: number;
+  kotDecision?: string | null;
+  paymentConfirmedAt?: string | null;
+  kotSentAt?: string | null;
   status: OrderStatus;
   subtotal: number | string;
   discount: number | string;
@@ -305,6 +479,18 @@ export interface Printer {
   port?: number | null;
   isActive: boolean;
   station?: PreparationStation | null;
+}
+
+export interface Notification {
+  id: string;
+  franchiseId: string;
+  userId?: string | null;
+  type: NotificationType;
+  title: string;
+  message: string;
+  isRead: boolean;
+  metadata?: any;
+  createdAt: string;
 }
 
 export interface AuditLog {

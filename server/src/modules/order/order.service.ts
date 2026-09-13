@@ -4,6 +4,7 @@ import prisma from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error.js";
 import { logAudit } from "../../lib/audit.js";
 import { emitToFranchise } from "../../lib/socket.js";
+import { deductInventoryForOrder } from "../inventory/inventory.service.js";
 
 export const orderItemInputSchema = z.object({
   menuItemId: z.string().min(1, "Menu item ID is required"),
@@ -14,8 +15,10 @@ export const orderItemInputSchema = z.object({
 export const createOrderSchema = z.object({
   tableSessionId: z.string().optional().nullable(),
   tableId: z.string().optional().nullable(),
+  partyName: z.string().trim().optional(),
+  guestCount: z.number().int().positive().default(1),
   discount: z.number().nonnegative().default(0),
-  taxRate: z.number().nonnegative().default(5), // 5% default tax
+  taxRate: z.number().nonnegative().default(5),
   items: z.array(orderItemInputSchema).min(1, "At least one item is required"),
 });
 
@@ -54,7 +57,7 @@ export async function listOrders(
       items: {
         include: {
           menuItem: {
-            include: { category: true, station: true },
+            include: { category: true, station: true, recipe: true },
           },
         },
       },
@@ -84,7 +87,7 @@ export async function getOrderById(id: string, franchiseId: string | null) {
       items: {
         include: {
           menuItem: {
-            include: { category: true, station: true },
+            include: { category: true, station: true, recipe: true },
           },
         },
       },
@@ -102,9 +105,6 @@ export async function getOrderById(id: string, franchiseId: string | null) {
       invoice: {
         include: { payments: true },
       },
-      franchise: {
-        select: { id: true, name: true, code: true },
-      },
     },
   });
 
@@ -116,59 +116,103 @@ export async function getOrderById(id: string, franchiseId: string | null) {
 }
 
 export async function createOrder(
-  data: z.infer<typeof createOrderSchema>,
+  input: z.input<typeof createOrderSchema>,
   franchiseId: string,
   currentUserId?: string
 ) {
-  // If tableId provided without tableSessionId, find or open session
+  const data = createOrderSchema.parse(input);
   let finalSessionId = data.tableSessionId;
+
   if (!finalSessionId && data.tableId) {
     const table = await prisma.restaurantTable.findUnique({
       where: { id: data.tableId },
-      include: { sessions: { where: { endedAt: null } } },
+      include: {
+        sessions: { where: { endedAt: null } },
+      },
     });
+
     if (!table || table.franchiseId !== franchiseId) {
-      throw new AppError("Table not found in this franchise", 404);
+      throw new AppError("Table not found", 404);
     }
-    if (table.sessions.length > 0) {
-      finalSessionId = table.sessions[0].id;
+
+    const guests = data.guestCount || 1;
+    const currentOcc = table.currentOccupancy || 0;
+    const remainingCap = Math.max(0, table.capacity - currentOcc);
+
+    if (remainingCap < guests && table.sessions.length > 0) {
+      throw new AppError(
+        `Table ${table.tableNumber} cannot accommodate ${guests} guests (Available seats: ${remainingCap}).`,
+        400
+      );
+    }
+
+    if (table.sessions.length > 0 && remainingCap >= guests) {
+      const session = await prisma.$transaction(async (tx) => {
+        const newSession = await tx.tableSession.create({
+          data: {
+            tableId: data.tableId!,
+            partyName: data.partyName || `Party of ${guests}`,
+            guestCount: guests,
+            startedAt: new Date(),
+          },
+        });
+        await tx.restaurantTable.update({
+          where: { id: data.tableId! },
+          data: {
+            currentOccupancy: currentOcc + guests,
+          },
+        });
+        return newSession;
+      });
+      finalSessionId = session.id;
     } else {
-      const newSession = await prisma.tableSession.create({
-        data: {
-          tableId: data.tableId,
-          startedAt: new Date(),
-        },
+      const session = await prisma.$transaction(async (tx) => {
+        const newSession = await tx.tableSession.create({
+          data: {
+            tableId: data.tableId!,
+            partyName: data.partyName || `Party of ${guests}`,
+            guestCount: guests,
+            startedAt: new Date(),
+          },
+        });
+
+        await tx.restaurantTable.update({
+          where: { id: data.tableId! },
+          data: {
+            status: TableStatus.OCCUPIED,
+            currentOccupancy: guests,
+          },
+        });
+
+        return newSession;
       });
-      await prisma.restaurantTable.update({
-        where: { id: data.tableId },
-        data: { status: TableStatus.OCCUPIED },
+
+      finalSessionId = session.id;
+      emitToFranchise(franchiseId, "table:status_changed", {
+        tableId: data.tableId,
+        status: TableStatus.OCCUPIED,
       });
-      finalSessionId = newSession.id;
     }
   }
 
-  // Fetch prices from DB for all items
   const menuItemIds = data.items.map((i) => i.menuItemId);
   const menuItems = await prisma.menuItem.findMany({
     where: {
       id: { in: menuItemIds },
       franchiseId,
+      isAvailable: true,
     },
-    include: { category: true, station: true },
   });
 
   if (menuItems.length !== menuItemIds.length) {
-    throw new AppError("One or more selected menu items are invalid or belong to another franchise", 400);
+    throw new AppError("One or more selected menu items are invalid or unavailable", 400);
   }
 
   const itemMap = new Map(menuItems.map((m) => [m.id, m]));
-
   let subtotalNum = 0;
+
   const processedItems = data.items.map((item) => {
     const dbItem = itemMap.get(item.menuItemId)!;
-    if (!dbItem.isAvailable) {
-      throw new AppError(`Menu item '${dbItem.name}' is currently marked unavailable`, 400);
-    }
     const unitPriceNum = Number(dbItem.price);
     const totalPriceNum = unitPriceNum * item.quantity;
     subtotalNum += totalPriceNum;
@@ -188,7 +232,6 @@ export async function createOrder(
   const taxNum = (taxableAmount * taxRate) / 100;
   const totalNum = taxableAmount + taxNum;
 
-  // Generate unique order number per franchise
   const franchise = await prisma.franchise.findUnique({
     where: { id: franchiseId },
     select: { code: true },
@@ -206,7 +249,10 @@ export async function createOrder(
       franchiseId,
       tableSessionId: finalSessionId || null,
       orderNumber,
+      partyName: data.partyName,
+      guestCount: data.guestCount || 1,
       status: OrderStatus.OPEN,
+      kotDecision: "PENDING",
       subtotal: new Prisma.Decimal(subtotalNum.toFixed(2)),
       discount: new Prisma.Decimal(discountNum.toFixed(2)),
       tax: new Prisma.Decimal(taxNum.toFixed(2)),
@@ -237,7 +283,11 @@ export async function createOrder(
     action: "CREATE_ORDER",
     entity: "Order",
     entityId: order.id,
-    newData: { id: order.id, orderNumber: order.orderNumber, total: order.total },
+    newData: {
+      orderNumber: order.orderNumber,
+      total: totalNum,
+      itemCount: processedItems.length,
+    },
   });
 
   return order;
@@ -262,7 +312,6 @@ export async function updateOrder(
     throw new AppError(`Cannot modify order in ${existing.status} status`, 400);
   }
 
-  // If items are being updated, recalculate totals
   let subtotalNum = Number(existing.subtotal);
   let processedItems = undefined;
 
@@ -370,6 +419,11 @@ export async function setOrderStatus(
     },
   });
 
+  // Automatically deduct inventory on SERVED
+  if (status === OrderStatus.SERVED) {
+    await deductInventoryForOrder(id, franchiseId);
+  }
+
   emitToFranchise(franchiseId, "order:status_changed", { orderId: id, status });
 
   await logAudit({
@@ -382,5 +436,28 @@ export async function setOrderStatus(
     newData: { status },
   });
 
+  return updated;
+}
+
+export async function recordKOTDecision(
+  id: string,
+  decision: "SENT" | "SKIPPED",
+  franchiseId: string,
+  currentUserId?: string
+) {
+  const existing = await prisma.order.findUnique({ where: { id } });
+  if (!existing || existing.franchiseId !== franchiseId) {
+    throw new AppError("Order not found", 404);
+  }
+
+  const updated = await prisma.order.update({
+    where: { id },
+    data: {
+      kotDecision: decision,
+      kotSentAt: decision === "SENT" ? new Date() : undefined,
+    },
+  });
+
+  emitToFranchise(franchiseId, "order:kot_decision", { orderId: id, decision });
   return updated;
 }

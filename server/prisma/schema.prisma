@@ -100,6 +100,38 @@ enum PrinterType {
   OTHER
 }
 
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AdvanceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  DEDUCTED
+}
+
+enum InventoryTxType {
+  PURCHASE
+  CONSUMPTION
+  WASTAGE
+  ADJUSTMENT
+  RETURN
+  REVERSAL
+  OPENING_STOCK
+}
+
+enum NotificationType {
+  LOW_STOCK
+  CRITICAL_STOCK
+  EXPENSE_SUBMITTED
+  PAYROLL_ADVANCE
+  KOT_READY
+  INFO
+}
+
 // =========================
 // FRANCHISE
 // =========================
@@ -116,20 +148,28 @@ model Franchise {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users      User[]
-  employees  Employee[]
-  categories Category[]
-  menuItems  MenuItem[]
-  tables     RestaurantTable[]
-  orders     Order[]
-  invoices   Invoice[]
-  payments   Payment[]
-  printers   Printer[]
-  stations   PreparationStation[]
-  payrolls   Payroll[]
-  attendance Attendance[]
-  leaveRequests LeaveRequest[]
-  auditLogs  AuditLog[]
+  users                 User[]
+  employees             Employee[]
+  categories            Category[]
+  menuItems             MenuItem[]
+  tables                RestaurantTable[]
+  orders                Order[]
+  invoices              Invoice[]
+  payments              Payment[]
+  printers              Printer[]
+  stations              PreparationStation[]
+  payrolls              Payroll[]
+  attendance            Attendance[]
+  leaveRequests         LeaveRequest[]
+  auditLogs             AuditLog[]
+  inventoryItems        InventoryItem[]
+  inventoryTransactions InventoryTransaction[]
+  recipes               Recipe[]
+  purchases             Purchase[]
+  expenseCategories     ExpenseCategory[]
+  expenses              Expense[]
+  employeeAdvances      EmployeeAdvance[]
+  notifications         Notification[]
 }
 
 // =========================
@@ -151,7 +191,8 @@ model User {
 
   franchise Franchise? @relation(fields: [franchiseId], references: [id])
 
-  auditLogs AuditLog[]
+  auditLogs     AuditLog[]
+  notifications Notification[]
 
   @@index([franchiseId])
 }
@@ -182,6 +223,7 @@ model Employee {
   leaveRequests   LeaveRequest[]
   salaryStructure SalaryStructure?
   payrollItems    PayrollItem[]
+  advances        EmployeeAdvance[]
 
   @@unique([franchiseId, employeeCode])
   @@index([franchiseId])
@@ -238,7 +280,7 @@ model LeaveRequest {
 }
 
 // =========================
-// SALARY
+// SALARY & PAYROLL
 // =========================
 
 model SalaryStructure {
@@ -254,10 +296,6 @@ model SalaryStructure {
 
   employee Employee @relation(fields: [employeeId], references: [id])
 }
-
-// =========================
-// PAYROLL
-// =========================
 
 model Payroll {
   id          String @id @default(uuid())
@@ -286,13 +324,14 @@ model PayrollItem {
   payrollId  String
   employeeId String
 
-  basicSalary Decimal @db.Decimal(12, 2)
-  allowances  Decimal @default(0) @db.Decimal(12, 2)
-  overtime    Decimal @default(0) @db.Decimal(12, 2)
-  bonus       Decimal @default(0) @db.Decimal(12, 2)
-  deductions  Decimal @default(0) @db.Decimal(12, 2)
-  advance     Decimal @default(0) @db.Decimal(12, 2)
-  netSalary   Decimal @db.Decimal(12, 2)
+  basicSalary      Decimal @db.Decimal(12, 2)
+  allowances       Decimal @default(0) @db.Decimal(12, 2)
+  overtime         Decimal @default(0) @db.Decimal(12, 2)
+  bonus            Decimal @default(0) @db.Decimal(12, 2)
+  deductions       Decimal @default(0) @db.Decimal(12, 2)
+  advance          Decimal @default(0) @db.Decimal(12, 2)
+  advancesDeducted Decimal @default(0) @db.Decimal(12, 2)
+  netSalary        Decimal @db.Decimal(12, 2)
 
   createdAt DateTime @default(now())
 
@@ -300,6 +339,205 @@ model PayrollItem {
   employee Employee @relation(fields: [employeeId], references: [id])
 
   @@unique([payrollId, employeeId])
+}
+
+model EmployeeAdvance {
+  id          String        @id @default(uuid())
+  franchiseId String
+  employeeId  String
+
+  amount        Decimal       @db.Decimal(12, 2)
+  reason        String?
+  paymentMethod PaymentMethod @default(CASH)
+  status        AdvanceStatus @default(APPROVED)
+  advanceDate   DateTime      @default(now())
+  approvedBy    String?
+  notes         String?
+  payrollId     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  franchise Franchise @relation(fields: [franchiseId], references: [id])
+  employee  Employee  @relation(fields: [employeeId], references: [id])
+
+  @@index([franchiseId])
+  @@index([employeeId])
+}
+
+// =========================
+// EXPENSES
+// =========================
+
+model ExpenseCategory {
+  id          String  @id @default(uuid())
+  franchiseId String
+  name        String
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  franchise Franchise @relation(fields: [franchiseId], references: [id])
+  expenses  Expense[]
+
+  @@unique([franchiseId, name])
+  @@index([franchiseId])
+}
+
+model Expense {
+  id          String  @id @default(uuid())
+  franchiseId String
+  categoryId  String
+
+  title         String
+  description   String?
+  amount        Decimal       @db.Decimal(12, 2)
+  paymentMethod PaymentMethod @default(CASH)
+  status        ExpenseStatus @default(PENDING)
+  recordedBy    String?
+  approvedBy    String?
+  expenseDate   DateTime      @default(now())
+  receiptUrl    String?
+  notes         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  franchise Franchise       @relation(fields: [franchiseId], references: [id])
+  category  ExpenseCategory @relation(fields: [categoryId], references: [id])
+
+  @@index([franchiseId])
+  @@index([categoryId])
+}
+
+// =========================
+// INVENTORY & SOP / RECIPES
+// =========================
+
+model InventoryItem {
+  id          String  @id @default(uuid())
+  franchiseId String
+
+  name          String
+  code          String?
+  category      String?
+  unit          String        // e.g. kg, g, l, ml, pcs
+  currentStock  Decimal       @default(0) @db.Decimal(12, 3)
+  minimumStock  Decimal       @default(0) @db.Decimal(12, 3)
+  reorderLevel  Decimal       @default(0) @db.Decimal(12, 3)
+  purchasePrice Decimal       @default(0) @db.Decimal(10, 2)
+  supplier      String?
+  isActive      Boolean       @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  franchise    Franchise              @relation(fields: [franchiseId], references: [id])
+  recipeItems  RecipeItem[]
+  transactions InventoryTransaction[]
+  purchaseItems PurchaseItem[]
+
+  @@unique([franchiseId, name])
+  @@index([franchiseId])
+}
+
+model InventoryTransaction {
+  id              String          @id @default(uuid())
+  franchiseId     String
+  inventoryItemId String
+
+  type          InventoryTxType
+  quantity      Decimal         @db.Decimal(12, 3)
+  previousStock Decimal         @db.Decimal(12, 3)
+  newStock      Decimal         @db.Decimal(12, 3)
+  unitPrice     Decimal?        @db.Decimal(10, 2)
+  referenceType String?         // ORDER, KOT, PURCHASE, ADJUSTMENT, WASTAGE
+  referenceId   String?
+  notes         String?
+  performedBy   String?
+
+  createdAt DateTime @default(now())
+
+  franchise     Franchise     @relation(fields: [franchiseId], references: [id])
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  @@index([franchiseId])
+  @@index([inventoryItemId])
+  @@index([createdAt])
+}
+
+model Recipe {
+  id          String  @id @default(uuid())
+  franchiseId String
+  menuItemId  String  @unique
+
+  name              String
+  prepInstructions  String?
+  servingSize       String?
+  wastageAllowance  Decimal @default(0) @db.Decimal(5, 2) // percentage
+  isActive          Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  franchise Franchise    @relation(fields: [franchiseId], references: [id])
+  menuItem  MenuItem     @relation(fields: [menuItemId], references: [id])
+  items     RecipeItem[]
+
+  @@index([franchiseId])
+}
+
+model RecipeItem {
+  id              String @id @default(uuid())
+  recipeId        String
+  inventoryItemId String
+
+  quantity         Decimal @db.Decimal(10, 3)
+  unit             String  // e.g. g, ml, pcs
+  wastageAllowance Decimal @default(0) @db.Decimal(5, 2)
+
+  recipe        Recipe        @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  @@unique([recipeId, inventoryItemId])
+  @@index([recipeId])
+}
+
+model Purchase {
+  id          String @id @default(uuid())
+  franchiseId String
+
+  invoiceNumber String
+  supplier      String
+  totalAmount   Decimal  @db.Decimal(12, 2)
+  receivedDate  DateTime @default(now())
+  receivedBy    String?
+  notes         String?
+  status        String   @default("COMPLETED")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  franchise Franchise      @relation(fields: [franchiseId], references: [id])
+  items     PurchaseItem[]
+
+  @@index([franchiseId])
+}
+
+model PurchaseItem {
+  id              String @id @default(uuid())
+  purchaseId      String
+  inventoryItemId String
+
+  quantity   Decimal @db.Decimal(12, 3)
+  unitPrice  Decimal @db.Decimal(10, 2)
+  totalPrice Decimal @db.Decimal(12, 2)
+
+  purchase      Purchase      @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  @@index([purchaseId])
 }
 
 // =========================
@@ -344,6 +582,7 @@ model MenuItem {
 
   orderItems OrderItem[]
   kotItems   KOTItem[]
+  recipe     Recipe?
 
   @@index([franchiseId])
   @@index([categoryId])
@@ -351,16 +590,17 @@ model MenuItem {
 }
 
 // =========================
-// TABLES
+// TABLES & SESSIONS
 // =========================
 
 model RestaurantTable {
   id          String @id @default(uuid())
   franchiseId String
 
-  tableNumber String
-  capacity    Int
-  status      TableStatus @default(AVAILABLE)
+  tableNumber      String
+  capacity         Int
+  currentOccupancy Int         @default(0)
+  status           TableStatus @default(AVAILABLE)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -373,11 +613,13 @@ model RestaurantTable {
 }
 
 model TableSession {
-  id      String @id @default(uuid())
-  tableId String
-
-  startedAt DateTime  @default(now())
-  endedAt   DateTime?
+  id          String    @id @default(uuid())
+  tableId     String
+  partyName   String?
+  guestCount  Int       @default(1)
+  status      String    @default("ACTIVE")
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
 
   table  RestaurantTable @relation(fields: [tableId], references: [id])
   orders Order[]
@@ -396,6 +638,12 @@ model Order {
 
   orderNumber String
   status      OrderStatus @default(OPEN)
+
+  partyName          String?
+  guestCount         Int       @default(1)
+  kotDecision        String?   @default("PENDING") // PENDING, SENT, SKIPPED
+  paymentConfirmedAt DateTime?
+  kotSentAt          DateTime?
 
   subtotal Decimal @default(0) @db.Decimal(12, 2)
   discount Decimal @default(0) @db.Decimal(12, 2)
@@ -422,11 +670,11 @@ model OrderItem {
   orderId    String
   menuItemId String
 
-  quantity   Int
-  unitPrice  Decimal @db.Decimal(10, 2)
-  totalPrice Decimal @db.Decimal(12, 2)
-
-  notes String?
+  quantity          Int
+  unitPrice         Decimal @db.Decimal(10, 2)
+  totalPrice        Decimal @db.Decimal(12, 2)
+  notes             String?
+  inventoryDeducted Boolean @default(false)
 
   order    Order    @relation(fields: [orderId], references: [id])
   menuItem MenuItem @relation(fields: [menuItemId], references: [id])
@@ -479,7 +727,7 @@ model KOTItem {
 }
 
 // =========================
-// BILLING
+// BILLING & PAYMENTS
 // =========================
 
 model Invoice {
@@ -562,6 +810,31 @@ model Printer {
   station   PreparationStation? @relation(fields: [stationId], references: [id])
 
   @@index([franchiseId])
+}
+
+// =========================
+// NOTIFICATIONS
+// =========================
+
+model Notification {
+  id          String           @id @default(uuid())
+  franchiseId String
+  userId      String?
+
+  type      NotificationType @default(INFO)
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  metadata  Json?
+
+  createdAt DateTime @default(now())
+
+  franchise Franchise @relation(fields: [franchiseId], references: [id])
+  user      User?     @relation(fields: [userId], references: [id])
+
+  @@index([franchiseId])
+  @@index([userId])
+  @@index([isRead])
 }
 
 // =========================

@@ -7,26 +7,31 @@ import { logAudit } from "../../lib/audit.js";
 export const generatePayrollSchema = z.object({
   month: z.number().int().min(1).max(12),
   year: z.number().int().min(2020).max(2100),
-  bonusMap: z.record(z.string(), z.number()).optional(),
-  deductionsMap: z.record(z.string(), z.number()).optional(),
-  advanceMap: z.record(z.string(), z.number()).optional(),
+  bonusMap: z.record(z.string(), z.number().min(0)).optional(),
+  deductionsMap: z.record(z.string(), z.number().min(0)).optional(),
+  advanceMap: z.record(z.string(), z.number().min(0)).optional(),
 });
 
-export async function listPayrolls(franchiseId: string | null) {
+export const updatePayrollItemSchema = z.object({
+  bonus: z.number().min(0).optional(),
+  deductions: z.number().min(0).optional(),
+  advance: z.number().min(0).optional(),
+  allowances: z.number().min(0).optional(),
+  overtime: z.number().min(0).optional(),
+});
+
+export async function listPayrolls(
+  franchiseId: string | null,
+  filters: { year?: number; status?: PayrollStatus } = {}
+) {
   if (!franchiseId) return [];
 
   return prisma.payroll.findMany({
-    where: { franchiseId },
-    include: {
-      _count: { select: { items: true } },
+    where: {
+      franchiseId,
+      year: filters.year || undefined,
+      status: filters.status || undefined,
     },
-    orderBy: [{ year: "desc" }, { month: "desc" }],
-  });
-}
-
-export async function getPayrollById(id: string, franchiseId: string | null) {
-  const payroll = await prisma.payroll.findUnique({
-    where: { id },
     include: {
       items: {
         include: {
@@ -41,22 +46,31 @@ export async function getPayrollById(id: string, franchiseId: string | null) {
           },
         },
       },
-      franchise: {
-        select: {
-          id: true,
-          name: true,
-          code: true,
+    },
+    orderBy: [{ year: "desc" }, { month: "desc" }],
+  });
+}
+
+export async function getPayrollById(id: string, franchiseId: string | null) {
+  if (!franchiseId) return null;
+
+  const payroll = await prisma.payroll.findUnique({
+    where: { id },
+    include: {
+      items: {
+        include: {
+          employee: {
+            include: {
+              salaryStructure: true,
+            },
+          },
         },
       },
     },
   });
 
-  if (!payroll) {
+  if (!payroll || payroll.franchiseId !== franchiseId) {
     throw new AppError("Payroll record not found", 404);
-  }
-
-  if (franchiseId && payroll.franchiseId !== franchiseId) {
-    throw new AppError("Access denied", 403);
   }
 
   return payroll;
@@ -82,7 +96,6 @@ export async function generateMonthlyPayroll(
     throw new AppError(`Payroll for ${data.month}/${data.year} is already ${existing.status} and cannot be regenerated`, 400);
   }
 
-  // Fetch all active employees with their salary structure
   const employees = await prisma.employee.findMany({
     where: {
       franchiseId,
@@ -97,16 +110,24 @@ export async function generateMonthlyPayroll(
     throw new AppError("No employees found to generate payroll for this franchise", 400);
   }
 
-  // Calculate days in the selected month
   const totalDaysInMonth = new Date(data.year, data.month, 0).getDate();
   const startOfMonth = new Date(Date.UTC(data.year, data.month - 1, 1));
   const endOfMonth = new Date(Date.UTC(data.year, data.month, 0, 23, 59, 59, 999));
 
-  // Fetch attendance records for all employees in this month
   const attendances = await prisma.attendance.findMany({
     where: {
       franchiseId,
       date: { gte: startOfMonth, lte: endOfMonth },
+    },
+  });
+
+  // Automatically fetch employee advances for this period
+  const advances = await prisma.employeeAdvance.findMany({
+    where: {
+      franchiseId,
+      status: "APPROVED",
+      advanceDate: { gte: startOfMonth, lte: endOfMonth },
+      payrollId: null,
     },
   });
 
@@ -117,21 +138,24 @@ export async function generateMonthlyPayroll(
   const itemsToCreate = employees.map((emp) => {
     const basic = emp.salaryStructure ? Number(emp.salaryStructure.basicSalary) : 0;
     const allowances = emp.salaryStructure ? Number(emp.salaryStructure.allowances) : 0;
-    const overtimeRate = emp.salaryStructure ? Number(emp.salaryStructure.overtimeRate) : 0;
 
-    // Attendance stats for this employee
     const empAttendances = attendances.filter((a) => a.employeeId === emp.id);
     const absentCount = empAttendances.filter((a) => a.status === "ABSENT").length;
     const halfDayCount = empAttendances.filter((a) => a.status === "HALF_DAY").length;
 
-    // Daily rate for deduction calculation
     const dailyRate = totalDaysInMonth > 0 ? basic / totalDaysInMonth : 0;
     const attendanceDeduction = (absentCount * dailyRate) + (halfDayCount * dailyRate * 0.5);
 
     const bonus = (data.bonusMap && data.bonusMap[emp.id]) ? data.bonusMap[emp.id] : 0;
     const extraDeduction = (data.deductionsMap && data.deductionsMap[emp.id]) ? data.deductionsMap[emp.id] : 0;
-    const advance = (data.advanceMap && data.advanceMap[emp.id]) ? data.advanceMap[emp.id] : 0;
-    const overtime = 0; // standard base
+    
+    // Auto-calculated advance total
+    const empAutoAdvance = advances
+      .filter((adv) => adv.employeeId === emp.id)
+      .reduce((sum, adv) => sum + Number(adv.amount), 0);
+    const manualAdvance = (data.advanceMap && data.advanceMap[emp.id]) ? data.advanceMap[emp.id] : 0;
+    const advance = empAutoAdvance + manualAdvance;
+    const overtime = 0;
 
     const gross = basic + allowances + overtime + bonus;
     const totalDeductions = attendanceDeduction + extraDeduction + advance;
@@ -149,6 +173,7 @@ export async function generateMonthlyPayroll(
       bonus: new Prisma.Decimal(bonus.toFixed(2)),
       deductions: new Prisma.Decimal((attendanceDeduction + extraDeduction).toFixed(2)),
       advance: new Prisma.Decimal(advance.toFixed(2)),
+      advancesDeducted: new Prisma.Decimal(empAutoAdvance.toFixed(2)),
       netSalary: new Prisma.Decimal(net.toFixed(2)),
     };
   });
@@ -218,14 +243,12 @@ export async function finalizePayroll(id: string, franchiseId: string, currentUs
     action: "FINALIZE_PAYROLL",
     entity: "Payroll",
     entityId: id,
-    oldData: { status: payroll.status },
-    newData: { status: PayrollStatus.FINALIZED },
   });
 
   return updated;
 }
 
-export async function markPayrollAsPaid(id: string, franchiseId: string, currentUserId?: string) {
+export async function markPayrollPaid(id: string, franchiseId: string, currentUserId?: string) {
   const payroll = await prisma.payroll.findUnique({ where: { id } });
   if (!payroll || payroll.franchiseId !== franchiseId) {
     throw new AppError("Payroll not found", 404);
@@ -235,21 +258,39 @@ export async function markPayrollAsPaid(id: string, franchiseId: string, current
     throw new AppError("Payroll is already marked as PAID", 400);
   }
 
-  const updated = await prisma.payroll.update({
-    where: { id },
-    data: { status: PayrollStatus.PAID },
-    include: { items: { include: { employee: true } } },
-  });
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.payroll.update({
+      where: { id },
+      data: { status: PayrollStatus.PAID },
+      include: { items: { include: { employee: true } } },
+    });
 
-  await logAudit({
-    franchiseId,
-    userId: currentUserId,
-    action: "PAY_PAYROLL",
-    entity: "Payroll",
-    entityId: id,
-    oldData: { status: payroll.status },
-    newData: { status: PayrollStatus.PAID },
-  });
+    // Mark all associated advances as DEDUCTED
+    const startOfMonth = new Date(Date.UTC(payroll.year, payroll.month - 1, 1));
+    const endOfMonth = new Date(Date.UTC(payroll.year, payroll.month, 0, 23, 59, 59, 999));
 
-  return updated;
+    await tx.employeeAdvance.updateMany({
+      where: {
+        franchiseId,
+        advanceDate: { gte: startOfMonth, lte: endOfMonth },
+        status: "APPROVED",
+        payrollId: null,
+      },
+      data: {
+        status: "DEDUCTED",
+        payrollId: id,
+      },
+    });
+
+    await logAudit({
+      franchiseId,
+      userId: currentUserId,
+      action: "MARK_PAYROLL_PAID",
+      entity: "Payroll",
+      entityId: id,
+    });
+
+    return updated;
+  });
 }
+export const markPayrollAsPaid = markPayrollPaid;
