@@ -1,11 +1,11 @@
-﻿services:
+services:
   # 1. Backend Web Service
   - type: web
     name: restaurant-pos-server
     runtime: node
     plan: free
     rootDir: server
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start
     envVars:
       - key: NODE_ENV
@@ -21,7 +21,7 @@
     runtime: static
     plan: free
     rootDir: client
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     staticPublishPath: dist
     routes:
       - type: rewrite
