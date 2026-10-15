@@ -167,14 +167,14 @@ export async function generateMonthlyPayroll(
 
     return {
       employeeId: emp.id,
-      basicSalary: new Prisma.Decimal(basic.toFixed(2)),
-      allowances: new Prisma.Decimal(allowances.toFixed(2)),
-      overtime: new Prisma.Decimal(overtime.toFixed(2)),
-      bonus: new Prisma.Decimal(bonus.toFixed(2)),
-      deductions: new Prisma.Decimal((attendanceDeduction + extraDeduction).toFixed(2)),
-      advance: new Prisma.Decimal(advance.toFixed(2)),
-      advancesDeducted: new Prisma.Decimal(empAutoAdvance.toFixed(2)),
-      netSalary: new Prisma.Decimal(net.toFixed(2)),
+      basicSalary: Number(basic.toFixed(2)),
+      allowances: Number(allowances.toFixed(2)),
+      overtime: Number(overtime.toFixed(2)),
+      bonus: Number(bonus.toFixed(2)),
+      deductions: Number((attendanceDeduction + extraDeduction).toFixed(2)),
+      advance: Number(advance.toFixed(2)),
+      advancesDeducted: Number(empAutoAdvance.toFixed(2)),
+      netSalary: Number(net.toFixed(2)),
     };
   });
 
@@ -190,9 +190,9 @@ export async function generateMonthlyPayroll(
         month: data.month,
         year: data.year,
         status: PayrollStatus.DRAFT,
-        totalGross: new Prisma.Decimal(totalGrossSum.toFixed(2)),
-        totalDeductions: new Prisma.Decimal(totalDeductionsSum.toFixed(2)),
-        totalNet: new Prisma.Decimal(totalNetSum.toFixed(2)),
+        totalGross: Number(totalGrossSum.toFixed(2)),
+        totalDeductions: Number(totalDeductionsSum.toFixed(2)),
+        totalNet: Number(totalNetSum.toFixed(2)),
         items: {
           create: itemsToCreate,
         },

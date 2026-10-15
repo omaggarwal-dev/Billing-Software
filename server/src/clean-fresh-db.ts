@@ -114,10 +114,10 @@ async function main() {
       tagline: "Fine Dining & Hospitality",
       currencySymbol: "₹",
       currencyCode: "INR",
-      defaultGstRate: new Prisma.Decimal(5.0),
-      vipDiscountPercent: new Prisma.Decimal(20.0),
-      loyalDiscountPercent: new Prisma.Decimal(15.0),
-      regularDiscountPercent: new Prisma.Decimal(10.0),
+      defaultGstRate: 5.0,
+      vipDiscountPercent: 20.0,
+      loyalDiscountPercent: 15.0,
+      regularDiscountPercent: 10.0,
     },
   });
 

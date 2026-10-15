@@ -116,7 +116,6 @@ export async function createFranchise(data: FranchiseInput, currentUserId?: stri
       { franchiseId: franchise.id, name: "Bar / Beverage" },
       { franchiseId: franchise.id, name: "Dessert" },
     ],
-    skipDuplicates: true,
   });
 
   await logAudit({

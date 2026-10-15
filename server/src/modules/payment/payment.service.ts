@@ -105,7 +105,7 @@ export async function processPayment(
       data: {
         franchiseId,
         invoiceId: data.invoiceId,
-        amount: new Prisma.Decimal(data.amount.toFixed(2)),
+        amount: Number(data.amount.toFixed(2)),
         method: data.method,
         status: PaymentStatus.COMPLETED,
         transactionId: data.transactionId || null,
@@ -215,7 +215,7 @@ export async function processSplitPayment(
         data: {
           franchiseId,
           invoiceId: data.invoiceId,
-          amount: new Prisma.Decimal(split.amount.toFixed(2)),
+          amount: Number(split.amount.toFixed(2)),
           method: split.method,
           status: PaymentStatus.COMPLETED,
           transactionId: split.transactionId || null,

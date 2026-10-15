@@ -20,8 +20,8 @@ export async function logAudit(options: AuditLogOptions) {
         action: options.action,
         entity: options.entity,
         entityId: options.entityId ?? null,
-        oldData: (options.oldData ? (options.oldData as Prisma.InputJsonValue) : Prisma.JsonNull),
-        newData: (options.newData ? (options.newData as Prisma.InputJsonValue) : Prisma.JsonNull),
+        oldData: (options.oldData ? (options.oldData as Prisma.InputJsonValue) : null),
+        newData: (options.newData ? (options.newData as Prisma.InputJsonValue) : null),
       },
     });
   } catch (err) {

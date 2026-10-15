@@ -122,7 +122,7 @@ async function runTest() {
     });
 
     // Call CRM transaction hook directly
-    const crmAfterOrder1 = await CRMService.recordCustomerTransaction(order1.id);
+    const crmAfterOrder1 = (await CRMService.recordCustomerTransaction(order1.id)) as any;
     if (!crmAfterOrder1) throw new Error("CRM transaction hook failed on order 1");
 
     console.log(`✅ CRM after 1st visit: Visits=${crmAfterOrder1.totalVisits}, Spend=₹${crmAfterOrder1.totalSpend}, Favorite=${crmAfterOrder1.preference?.favoriteItemName}, Segment=${crmAfterOrder1.segment}`);

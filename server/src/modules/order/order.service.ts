@@ -224,8 +224,8 @@ export async function createOrder(
     return {
       menuItemId: item.menuItemId,
       quantity: item.quantity,
-      unitPrice: new Prisma.Decimal(unitPriceNum.toFixed(2)),
-      totalPrice: new Prisma.Decimal(totalPriceNum.toFixed(2)),
+      unitPrice: Number(unitPriceNum.toFixed(2)),
+      totalPrice: Number(totalPriceNum.toFixed(2)),
       notes: item.notes || null,
     };
   });
@@ -258,10 +258,10 @@ export async function createOrder(
       guestCount: data.guestCount || 1,
       status: OrderStatus.OPEN,
       kotDecision: "PENDING",
-      subtotal: new Prisma.Decimal(subtotalNum.toFixed(2)),
-      discount: new Prisma.Decimal(discountNum.toFixed(2)),
-      tax: new Prisma.Decimal(taxNum.toFixed(2)),
-      total: new Prisma.Decimal(totalNum.toFixed(2)),
+      subtotal: Number(subtotalNum.toFixed(2)),
+      discount: Number(discountNum.toFixed(2)),
+      tax: Number(taxNum.toFixed(2)),
+      total: Number(totalNum.toFixed(2)),
       items: {
         create: processedItems,
       },
@@ -343,8 +343,8 @@ export async function updateOrder(
       return {
         menuItemId: item.menuItemId,
         quantity: item.quantity,
-        unitPrice: new Prisma.Decimal(unitPriceNum.toFixed(2)),
-        totalPrice: new Prisma.Decimal(totalPriceNum.toFixed(2)),
+        unitPrice: Number(unitPriceNum.toFixed(2)),
+        totalPrice: Number(totalPriceNum.toFixed(2)),
         notes: item.notes || null,
       };
     });
@@ -368,10 +368,10 @@ export async function updateOrder(
       where: { id },
       data: {
         status: data.status || undefined,
-        subtotal: new Prisma.Decimal(subtotalNum.toFixed(2)),
-        discount: new Prisma.Decimal(discountNum.toFixed(2)),
-        tax: new Prisma.Decimal(taxNum.toFixed(2)),
-        total: new Prisma.Decimal(totalNum.toFixed(2)),
+        subtotal: Number(subtotalNum.toFixed(2)),
+        discount: Number(discountNum.toFixed(2)),
+        tax: Number(taxNum.toFixed(2)),
+        total: Number(totalNum.toFixed(2)),
       },
       include: {
         items: {

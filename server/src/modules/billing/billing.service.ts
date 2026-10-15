@@ -163,10 +163,10 @@ export async function createInvoiceForOrder(
         franchiseId,
         orderId: data.orderId,
         invoiceNumber,
-        subtotal: new Prisma.Decimal(subtotalNum.toFixed(2)),
-        discount: new Prisma.Decimal(discountNum.toFixed(2)),
-        tax: new Prisma.Decimal(taxNum.toFixed(2)),
-        total: new Prisma.Decimal(totalNum.toFixed(2)),
+        subtotal: Number(subtotalNum.toFixed(2)),
+        discount: Number(discountNum.toFixed(2)),
+        tax: Number(taxNum.toFixed(2)),
+        total: Number(totalNum.toFixed(2)),
       },
       include: {
         order: {
@@ -183,9 +183,9 @@ export async function createInvoiceForOrder(
       where: { id: data.orderId },
       data: {
         status: OrderStatus.BILLED,
-        discount: new Prisma.Decimal(discountNum.toFixed(2)),
-        tax: new Prisma.Decimal(taxNum.toFixed(2)),
-        total: new Prisma.Decimal(totalNum.toFixed(2)),
+        discount: Number(discountNum.toFixed(2)),
+        tax: Number(taxNum.toFixed(2)),
+        total: Number(totalNum.toFixed(2)),
       },
     });
 

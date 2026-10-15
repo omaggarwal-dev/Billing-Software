@@ -113,9 +113,9 @@ export async function createEmployee(data: CreateEmployeeInput, targetFranchiseI
       await tx.salaryStructure.create({
         data: {
           employeeId: created.id,
-          basicSalary: new Prisma.Decimal(data.salaryStructure.basicSalary),
-          allowances: new Prisma.Decimal(data.salaryStructure.allowances || 0),
-          overtimeRate: new Prisma.Decimal(data.salaryStructure.overtimeRate || 0),
+          basicSalary: Number(data.salaryStructure.basicSalary),
+          allowances: Number(data.salaryStructure.allowances || 0),
+          overtimeRate: Number(data.salaryStructure.overtimeRate || 0),
         },
       });
     }
@@ -191,14 +191,14 @@ export async function updateEmployee(
         where: { employeeId: id },
         create: {
           employeeId: id,
-          basicSalary: new Prisma.Decimal(data.salaryStructure.basicSalary),
-          allowances: new Prisma.Decimal(data.salaryStructure.allowances || 0),
-          overtimeRate: new Prisma.Decimal(data.salaryStructure.overtimeRate || 0),
+          basicSalary: Number(data.salaryStructure.basicSalary),
+          allowances: Number(data.salaryStructure.allowances || 0),
+          overtimeRate: Number(data.salaryStructure.overtimeRate || 0),
         },
         update: {
-          basicSalary: new Prisma.Decimal(data.salaryStructure.basicSalary),
-          allowances: new Prisma.Decimal(data.salaryStructure.allowances || 0),
-          overtimeRate: new Prisma.Decimal(data.salaryStructure.overtimeRate || 0),
+          basicSalary: Number(data.salaryStructure.basicSalary),
+          allowances: Number(data.salaryStructure.allowances || 0),
+          overtimeRate: Number(data.salaryStructure.overtimeRate || 0),
         },
       });
     }

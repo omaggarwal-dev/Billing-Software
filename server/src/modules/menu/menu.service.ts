@@ -225,7 +225,7 @@ export async function createMenuItem(
       name: data.name,
       code: data.code,
       description: data.description,
-      price: new Prisma.Decimal(data.price),
+      price: Number(data.price),
       isAvailable: data.isAvailable,
     },
     include: {
@@ -293,7 +293,7 @@ export async function updateMenuItem(
       name: data.name,
       code: data.code,
       description: data.description,
-      price: data.price !== undefined ? new Prisma.Decimal(data.price) : undefined,
+      price: data.price !== undefined ? Number(data.price) : undefined,
       isAvailable: data.isAvailable,
     },
     include: {

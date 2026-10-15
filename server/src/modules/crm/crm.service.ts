@@ -374,8 +374,8 @@ export class CRMService {
       where: { id: customerId },
       data: {
         totalVisits,
-        totalSpend: new Prisma.Decimal(totalSpend.toFixed(2)),
-        averageOrderValue: new Prisma.Decimal(averageOrderValue.toFixed(2)),
+        totalSpend: Number(totalSpend.toFixed(2)),
+        averageOrderValue: Number(averageOrderValue.toFixed(2)),
         lastVisitAt: now,
         firstVisitAt: order.customer?.firstVisitAt || now,
         segment,
@@ -620,7 +620,7 @@ export class CRMService {
         discountCode: data.discountCode?.trim() || null,
         discountPercent:
           data.discountPercent !== undefined && data.discountPercent !== null
-            ? new Prisma.Decimal(data.discountPercent)
+            ? Number(data.discountPercent)
             : null,
         cooldownDays: data.cooldownDays ?? 7,
         scheduledAt: data.scheduledAt ? new Date(data.scheduledAt) : null,

@@ -33,10 +33,10 @@ export async function getBrandSettings() {
         tagline: "Fine Dining & Hospitality",
         currencySymbol: "₹",
         currencyCode: "INR",
-        defaultGstRate: new Prisma.Decimal(5.0),
-        vipDiscountPercent: new Prisma.Decimal(20.0),
-        loyalDiscountPercent: new Prisma.Decimal(15.0),
-        regularDiscountPercent: new Prisma.Decimal(10.0),
+        defaultGstRate: 5.0,
+        vipDiscountPercent: 20.0,
+        loyalDiscountPercent: 15.0,
+        regularDiscountPercent: 10.0,
       },
     });
   }
@@ -64,16 +64,16 @@ export async function updateBrandSettings(data: UpdateBrandSettingsInput) {
     fssaiNumber: data.fssaiNumber !== undefined ? (data.fssaiNumber?.trim() || null) : undefined,
     currencySymbol: (data.currencySymbol || data.currency)?.trim() || undefined,
     currencyCode: data.currencyCode?.trim() || undefined,
-    defaultGstRate: data.defaultGstRate !== undefined ? new Prisma.Decimal(data.defaultGstRate) : undefined,
+    defaultGstRate: data.defaultGstRate !== undefined ? Number(data.defaultGstRate) : undefined,
     vipDiscountPercent: data.vipDiscountPercent !== undefined 
-      ? new Prisma.Decimal(data.vipDiscountPercent) 
-      : (data.loyaltyVipDiscount !== undefined ? new Prisma.Decimal(data.loyaltyVipDiscount) : undefined),
+      ? Number(data.vipDiscountPercent) 
+      : (data.loyaltyVipDiscount !== undefined ? Number(data.loyaltyVipDiscount) : undefined),
     loyalDiscountPercent: data.loyalDiscountPercent !== undefined 
-      ? new Prisma.Decimal(data.loyalDiscountPercent) 
-      : (data.loyaltyLoyalDiscount !== undefined ? new Prisma.Decimal(data.loyaltyLoyalDiscount) : undefined),
+      ? Number(data.loyalDiscountPercent) 
+      : (data.loyaltyLoyalDiscount !== undefined ? Number(data.loyaltyLoyalDiscount) : undefined),
     regularDiscountPercent: data.regularDiscountPercent !== undefined 
-      ? new Prisma.Decimal(data.regularDiscountPercent) 
-      : (data.loyaltyRegularDiscount !== undefined ? new Prisma.Decimal(data.loyaltyRegularDiscount) : undefined),
+      ? Number(data.regularDiscountPercent) 
+      : (data.loyaltyRegularDiscount !== undefined ? Number(data.loyaltyRegularDiscount) : undefined),
     whatsappSupportNumber: data.whatsappSupportNumber !== undefined ? (data.whatsappSupportNumber?.trim() || null) : undefined,
   };
 
