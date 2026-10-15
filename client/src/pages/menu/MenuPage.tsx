@@ -16,7 +16,7 @@ import { EmptyState } from "../../components/common/EmptyState.js";
 export const MenuPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { selectedFranchiseId, user } = useAuthStore();
-  const canEdit = ["SUPER_ADMIN", "FRANCHISE_MANAGER", "CHEF"].includes(user?.role || "");
+  const isBrandOwner = user?.role === "SUPER_ADMIN";
 
   const [activeTab, setActiveTab] = useState<"items" | "categories">("items");
   const [searchTerm, setSearchTerm] = useState("");
@@ -29,6 +29,7 @@ export const MenuPage: React.FC = () => {
     categoryId: "",
     stationId: "",
     name: "",
+    code: "",
     description: "",
     price: 150,
     isAvailable: true,
@@ -82,6 +83,7 @@ export const MenuPage: React.FC = () => {
         categoryId: data.categoryId,
         stationId: data.stationId || null,
         name: data.name,
+        code: data.code.trim().toUpperCase(),
         description: data.description || null,
         price: Number(data.price),
         isAvailable: data.isAvailable,
@@ -140,6 +142,7 @@ export const MenuPage: React.FC = () => {
       categoryId: categories[0]?.id || "",
       stationId: stations[0]?.id || "",
       name: "",
+      code: "",
       description: "",
       price: 200,
       isAvailable: true,
@@ -154,6 +157,7 @@ export const MenuPage: React.FC = () => {
       categoryId: item.categoryId,
       stationId: item.stationId || "",
       name: item.name,
+      code: item.code || "",
       description: item.description || "",
       price: Number(item.price),
       isAvailable: item.isAvailable,
@@ -183,6 +187,7 @@ export const MenuPage: React.FC = () => {
   const filteredItems = menuItems.filter(
     (i) =>
       i.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (i.code || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (i.category?.name || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -197,7 +202,7 @@ export const MenuPage: React.FC = () => {
           </p>
         </div>
 
-        {canEdit && (
+        {isBrandOwner ? (
           <div className="flex items-center gap-3">
             <Button
               variant="outline"
@@ -213,6 +218,11 @@ export const MenuPage: React.FC = () => {
             >
               Add Menu Item
             </Button>
+          </div>
+        ) : (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-center gap-2 max-w-md">
+            <Tag className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>Master Menu is centrally governed by Brand Owner. You can toggle live dish availability (In Stock / Out of Stock) below.</span>
           </div>
         )}
       </div>
@@ -269,8 +279,8 @@ export const MenuPage: React.FC = () => {
             <EmptyState
               title="No Dishes Found"
               description="Create menu items and assign them to categories and kitchen stations."
-              actionLabel="Add Dish"
-              onAction={handleOpenCreateItem}
+              actionLabel={isBrandOwner ? "Add Dish" : undefined}
+              onAction={isBrandOwner ? handleOpenCreateItem : undefined}
             />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -278,7 +288,16 @@ export const MenuPage: React.FC = () => {
                 <Card
                   key={item.id}
                   className="hover:shadow-md transition-shadow"
-                  title={<span className="font-bold text-gray-900">{item.name}</span>}
+                  title={
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-gray-900">{item.name}</span>
+                      {item.code && (
+                        <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">
+                          {item.code}
+                        </span>
+                      )}
+                    </div>
+                  }
                   action={
                     <span className="font-bold text-emerald-600 text-base">
                       ₹{Number(item.price).toFixed(2)}
@@ -323,7 +342,7 @@ export const MenuPage: React.FC = () => {
                         )}
                       </button>
 
-                      {canEdit && (
+                      {isBrandOwner && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -362,7 +381,7 @@ export const MenuPage: React.FC = () => {
 
                 <div className="flex items-center justify-between text-xs pt-2 border-t border-gray-100 font-medium text-gray-600">
                   <span>{cat._count?.menuItems || 0} Menu Items</span>
-                  {canEdit && (
+                  {isBrandOwner && (
                     <div className="flex items-center gap-2">
                       <Button
                         variant="ghost"
@@ -412,13 +431,23 @@ export const MenuPage: React.FC = () => {
             </div>
           )}
 
-          <Input
-            label="Dish Name *"
-            required
-            placeholder="e.g. Paneer Butter Masala"
-            value={itemFormData.name}
-            onChange={(e) => setItemFormData({ ...itemFormData, name: e.target.value })}
-          />
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Dish Name *"
+              required
+              placeholder="e.g. Paneer Butter Masala"
+              value={itemFormData.name}
+              onChange={(e) => setItemFormData({ ...itemFormData, name: e.target.value })}
+            />
+
+            <Input
+              label="Dish Code (Unique) *"
+              required
+              placeholder="e.g. DISH-PBM01"
+              value={itemFormData.code}
+              onChange={(e) => setItemFormData({ ...itemFormData, code: e.target.value.toUpperCase() })}
+            />
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <Select

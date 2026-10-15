@@ -26,6 +26,8 @@ import { InventoryPage } from "../pages/inventory/InventoryPage.js";
 import { RecipesPage } from "../pages/recipes/RecipesPage.js";
 import { ExpensesPage } from "../pages/expenses/ExpensesPage.js";
 import { AdvancesPage } from "../pages/advances/AdvancesPage.js";
+import { CRMPage } from "../pages/crm/CRMPage.js";
+import { BrandSettingsPage } from "../pages/settings/BrandSettingsPage.js";
 
 function RootRedirect() {
   const { user, isAuthenticated } = useAuthStore();
@@ -225,6 +227,24 @@ export const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute allowedRoles={["SUPER_ADMIN", "FRANCHISE_MANAGER"]}>
               <AuditLogsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/crm"
+          element={
+            <ProtectedRoute allowedRoles={["SUPER_ADMIN", "FRANCHISE_MANAGER"]}>
+              <CRMPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute allowedRoles={["SUPER_ADMIN"]}>
+              <BrandSettingsPage />
             </ProtectedRoute>
           }
         />

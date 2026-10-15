@@ -54,7 +54,7 @@ export async function createAdvance(
     data: {
       franchiseId,
       employeeId: data.employeeId,
-      amount: new Prisma.Decimal(data.amount.toFixed(2)),
+      amount: Number(data.amount.toFixed(2)),
       reason: data.reason,
       paymentMethod: data.paymentMethod as PaymentMethod,
       status: AdvanceStatus.APPROVED, // Immediate payout to employee

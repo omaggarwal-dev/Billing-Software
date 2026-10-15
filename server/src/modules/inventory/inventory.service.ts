@@ -7,7 +7,7 @@ import { emitToFranchise } from "../../lib/socket.js";
 
 export const createInventoryItemSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
-  code: z.string().trim().optional(),
+  code: z.string().trim().min(1, "Raw material code is required").transform((val) => val.toUpperCase()),
   category: z.string().trim().optional(),
   unit: z.string().trim().min(1, "Unit is required"),
   currentStock: z.number().min(0).default(0),
@@ -72,12 +72,20 @@ export async function createInventoryItem(
   franchiseId: string,
   userId?: string
 ) {
-  const existing = await prisma.inventoryItem.findFirst({
+  const existingName = await prisma.inventoryItem.findFirst({
     where: { franchiseId, name: { equals: data.name, mode: "insensitive" } },
   });
 
-  if (existing) {
+  if (existingName) {
     throw new AppError("An inventory item with this name already exists in this franchise", 400);
+  }
+
+  const existingCode = await prisma.inventoryItem.findFirst({
+    where: { franchiseId, code: data.code },
+  });
+
+  if (existingCode) {
+    throw new AppError(`A raw material with code "${data.code}" already exists in this franchise`, 409);
   }
 
   return prisma.$transaction(async (tx) => {
@@ -88,10 +96,10 @@ export async function createInventoryItem(
         code: data.code,
         category: data.category,
         unit: data.unit.toLowerCase(),
-        currentStock: new Prisma.Decimal(data.currentStock),
-        minimumStock: new Prisma.Decimal(data.minimumStock),
-        reorderLevel: new Prisma.Decimal(data.reorderLevel),
-        purchasePrice: new Prisma.Decimal(data.purchasePrice),
+        currentStock: Number(data.currentStock),
+        minimumStock: Number(data.minimumStock),
+        reorderLevel: Number(data.reorderLevel),
+        purchasePrice: Number(data.purchasePrice),
         supplier: data.supplier,
       },
     });
@@ -102,10 +110,10 @@ export async function createInventoryItem(
           franchiseId,
           inventoryItemId: item.id,
           type: InventoryTxType.OPENING_STOCK,
-          quantity: new Prisma.Decimal(data.currentStock),
-          previousStock: new Prisma.Decimal(0),
-          newStock: new Prisma.Decimal(data.currentStock),
-          unitPrice: new Prisma.Decimal(data.purchasePrice),
+          quantity: Number(data.currentStock),
+          previousStock: 0,
+          newStock: Number(data.currentStock),
+          unitPrice: Number(data.purchasePrice),
           referenceType: "MANUAL",
           notes: "Initial opening stock",
           performedBy: userId,
@@ -135,6 +143,15 @@ export async function updateInventoryItem(
   const existing = await prisma.inventoryItem.findFirst({ where: { id, franchiseId } });
   if (!existing) throw new AppError("Inventory item not found", 404);
 
+  if (data.code && data.code !== existing.code) {
+    const conflict = await prisma.inventoryItem.findFirst({
+      where: { franchiseId, code: data.code, NOT: { id } },
+    });
+    if (conflict) {
+      throw new AppError(`A raw material with code "${data.code}" already exists in this franchise`, 409);
+    }
+  }
+
   const updated = await prisma.inventoryItem.update({
     where: { id },
     data: {
@@ -142,9 +159,9 @@ export async function updateInventoryItem(
       code: data.code,
       category: data.category,
       unit: data.unit ? data.unit.toLowerCase() : undefined,
-      minimumStock: data.minimumStock !== undefined ? new Prisma.Decimal(data.minimumStock) : undefined,
-      reorderLevel: data.reorderLevel !== undefined ? new Prisma.Decimal(data.reorderLevel) : undefined,
-      purchasePrice: data.purchasePrice !== undefined ? new Prisma.Decimal(data.purchasePrice) : undefined,
+      minimumStock: data.minimumStock !== undefined ? Number(data.minimumStock) : undefined,
+      reorderLevel: data.reorderLevel !== undefined ? Number(data.reorderLevel) : undefined,
+      purchasePrice: data.purchasePrice !== undefined ? Number(data.purchasePrice) : undefined,
       supplier: data.supplier,
     },
   });
@@ -178,16 +195,16 @@ export async function recordStockIn(
         franchiseId,
         invoiceNumber: data.invoiceNumber,
         supplier: data.supplier,
-        totalAmount: new Prisma.Decimal(totalAmount.toFixed(2)),
+        totalAmount: Number(totalAmount.toFixed(2)),
         notes: data.notes,
         receivedBy: userId,
         status: "COMPLETED",
         items: {
           create: data.items.map((it) => ({
             inventoryItemId: it.inventoryItemId,
-            quantity: new Prisma.Decimal(it.quantity),
-            unitPrice: new Prisma.Decimal(it.unitPrice),
-            totalPrice: new Prisma.Decimal((it.quantity * it.unitPrice).toFixed(2)),
+            quantity: Number(it.quantity),
+            unitPrice: Number(it.unitPrice),
+            totalPrice: Number((it.quantity * it.unitPrice).toFixed(2)),
           })),
         },
       },
@@ -206,8 +223,8 @@ export async function recordStockIn(
       await tx.inventoryItem.update({
         where: { id: invItem.id },
         data: {
-          currentStock: new Prisma.Decimal(newStock.toFixed(3)),
-          purchasePrice: new Prisma.Decimal(item.unitPrice.toFixed(2)),
+          currentStock: Number(newStock.toFixed(3)),
+          purchasePrice: Number(item.unitPrice.toFixed(2)),
           supplier: data.supplier,
         },
       });
@@ -217,10 +234,10 @@ export async function recordStockIn(
           franchiseId,
           inventoryItemId: invItem.id,
           type: InventoryTxType.PURCHASE,
-          quantity: new Prisma.Decimal(item.quantity.toFixed(3)),
-          previousStock: new Prisma.Decimal(prevStock.toFixed(3)),
-          newStock: new Prisma.Decimal(newStock.toFixed(3)),
-          unitPrice: new Prisma.Decimal(item.unitPrice.toFixed(2)),
+          quantity: Number(item.quantity.toFixed(3)),
+          previousStock: Number(prevStock.toFixed(3)),
+          newStock: Number(newStock.toFixed(3)),
+          unitPrice: Number(item.unitPrice.toFixed(2)),
           referenceType: "PURCHASE",
           referenceId: purchase.id,
           notes: `Stock in Invoice #${data.invoiceNumber} from ${data.supplier}`,
@@ -263,7 +280,7 @@ export async function adjustStock(
 
     await tx.inventoryItem.update({
       where: { id: invItem.id },
-      data: { currentStock: new Prisma.Decimal(newStock.toFixed(3)) },
+      data: { currentStock: Number(newStock.toFixed(3)) },
     });
 
     const txRecord = await tx.inventoryTransaction.create({
@@ -271,9 +288,9 @@ export async function adjustStock(
         franchiseId,
         inventoryItemId: invItem.id,
         type: data.type as InventoryTxType,
-        quantity: new Prisma.Decimal(data.quantity.toFixed(3)),
-        previousStock: new Prisma.Decimal(prevStock.toFixed(3)),
-        newStock: new Prisma.Decimal(newStock.toFixed(3)),
+        quantity: Number(data.quantity.toFixed(3)),
+        previousStock: Number(prevStock.toFixed(3)),
+        newStock: Number(newStock.toFixed(3)),
         referenceType: "MANUAL",
         notes: data.notes,
         performedBy: userId,
@@ -330,7 +347,7 @@ export async function deductInventoryForOrder(orderId: string, franchiseId: stri
 
         await tx.inventoryItem.update({
           where: { id: invItem.id },
-          data: { currentStock: new Prisma.Decimal(newStock.toFixed(3)) },
+          data: { currentStock: Number(newStock.toFixed(3)) },
         });
 
         await tx.inventoryTransaction.create({
@@ -338,9 +355,9 @@ export async function deductInventoryForOrder(orderId: string, franchiseId: stri
             franchiseId,
             inventoryItemId: invItem.id,
             type: InventoryTxType.CONSUMPTION,
-            quantity: new Prisma.Decimal((-totalDeduct).toFixed(3)),
-            previousStock: new Prisma.Decimal(currentStock.toFixed(3)),
-            newStock: new Prisma.Decimal(newStock.toFixed(3)),
+            quantity: Number((-totalDeduct).toFixed(3)),
+            previousStock: Number(currentStock.toFixed(3)),
+            newStock: Number(newStock.toFixed(3)),
             referenceType: "ORDER",
             referenceId: order.id,
             notes: `Consumed for Order #${order.orderNumber} (${item.quantity}x ${item.menuItem.name})`,

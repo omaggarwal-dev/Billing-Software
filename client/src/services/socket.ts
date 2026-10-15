@@ -2,9 +2,13 @@ import { io, Socket } from "socket.io-client";
 
 let socket: Socket | null = null;
 
+const SOCKET_BASE_URL = 
+  import.meta.env.VITE_SOCKET_URL || 
+  (import.meta.env.VITE_API_URL ? String(import.meta.env.VITE_API_URL).replace(/\/api\/?$/, "") : "http://localhost:5000");
+
 export function getSocket(): Socket {
   if (!socket) {
-    socket = io("http://localhost:5000", {
+    socket = io(SOCKET_BASE_URL, {
       autoConnect: true,
       reconnection: true,
       reconnectionDelay: 1000,

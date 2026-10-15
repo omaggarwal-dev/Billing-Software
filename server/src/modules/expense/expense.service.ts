@@ -103,7 +103,7 @@ export async function createExpense(
       categoryId: data.categoryId,
       title: data.title,
       description: data.description,
-      amount: new Prisma.Decimal(data.amount.toFixed(2)),
+      amount: Number(data.amount.toFixed(2)),
       paymentMethod: data.paymentMethod as PaymentMethod,
       status,
       recordedBy: userId,

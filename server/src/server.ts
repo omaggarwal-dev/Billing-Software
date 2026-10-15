@@ -24,6 +24,8 @@ import recipeRoutes from "./modules/recipe/recipe.routes.js";
 import expenseRoutes from "./modules/expense/expense.routes.js";
 import advanceRoutes from "./modules/advance/advance.routes.js";
 import notificationRoutes from "./modules/notification/notification.routes.js";
+import crmRoutes from "./modules/crm/crm.routes.js";
+import brandRoutes from "./modules/brand/brand.routes.js";
 
 import { initSocket } from "./lib/socket.js";
 import { errorHandler } from "./middleware/error.js";
@@ -96,12 +98,19 @@ app.use("/api/recipes", recipeRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/advances", advanceRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/crm", crmRoutes);
+app.use("/api/brand-settings", brandRoutes);
 
 // Centralized error handler
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-server.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== "test") {
+  server.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+  });
+}
+
+export { app, server };
+export default app;

@@ -139,6 +139,7 @@ export const menuItemSchema = z.object({
   categoryId: z.string().min(1, "Category is required"),
   stationId: z.string().optional().nullable(),
   name: z.string().trim().min(1, "Item name is required"),
+  code: z.string().trim().min(1, "Dish code is required").transform((val) => val.toUpperCase()),
   description: z.string().trim().optional().nullable(),
   price: z.number().positive("Price must be greater than 0"),
   isAvailable: z.boolean().default(true),
@@ -204,14 +205,27 @@ export async function createMenuItem(
     }
   }
 
+  const existingCode = await prisma.menuItem.findUnique({
+    where: {
+      franchiseId_code: {
+        franchiseId,
+        code: data.code,
+      },
+    },
+  });
+  if (existingCode) {
+    throw new AppError(`A dish with code "${data.code}" already exists in this franchise`, 409);
+  }
+
   const item = await prisma.menuItem.create({
     data: {
       franchiseId,
       categoryId: data.categoryId,
       stationId: data.stationId || null,
       name: data.name,
+      code: data.code,
       description: data.description,
-      price: new Prisma.Decimal(data.price),
+      price: Number(data.price),
       isAvailable: data.isAvailable,
     },
     include: {
@@ -257,14 +271,29 @@ export async function updateMenuItem(
     }
   }
 
+  if (data.code && data.code !== existing.code) {
+    const conflict = await prisma.menuItem.findUnique({
+      where: {
+        franchiseId_code: {
+          franchiseId,
+          code: data.code,
+        },
+      },
+    });
+    if (conflict) {
+      throw new AppError(`A dish with code "${data.code}" already exists in this franchise`, 409);
+    }
+  }
+
   const updated = await prisma.menuItem.update({
     where: { id },
     data: {
       categoryId: data.categoryId,
       stationId: data.stationId !== undefined ? (data.stationId || null) : undefined,
       name: data.name,
+      code: data.code,
       description: data.description,
-      price: data.price !== undefined ? new Prisma.Decimal(data.price) : undefined,
+      price: data.price !== undefined ? Number(data.price) : undefined,
       isAvailable: data.isAvailable,
     },
     include: {

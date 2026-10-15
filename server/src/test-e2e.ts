@@ -151,6 +151,7 @@ async function runEndToEndTests() {
   const rawPaneer = await createInventoryItem(
     {
       name: "Fresh Cottage Cheese (Paneer)",
+      code: "RAW-PAN01",
       unit: "KG",
       minimumStock: 5,
       reorderLevel: 10,
@@ -164,6 +165,7 @@ async function runEndToEndTests() {
   const rawChicken = await createInventoryItem(
     {
       name: "Boneless Chicken",
+      code: "RAW-CHK01",
       unit: "KG",
       minimumStock: 10,
       reorderLevel: 20,
@@ -203,6 +205,7 @@ async function runEndToEndTests() {
       categoryId: cat1.id,
       stationId: tandoorStation?.id,
       name: "Paneer Tikka",
+      code: "DISH-PT01",
       description: "Charcoal grilled spiced cottage cheese",
       price: 280,
       isAvailable: true,
@@ -216,6 +219,7 @@ async function runEndToEndTests() {
       categoryId: cat2.id,
       stationId: kitchenStation?.id,
       name: "Butter Chicken",
+      code: "DISH-BC01",
       description: "Tender chicken cooked in rich makhani gravy",
       price: 420,
       isAvailable: true,
@@ -229,6 +233,7 @@ async function runEndToEndTests() {
       categoryId: cat2.id,
       stationId: tandoorStation?.id,
       name: "Garlic Naan",
+      code: "DISH-GN01",
       description: "Crispy tandoori naan with roasted garlic",
       price: 60,
       isAvailable: true,

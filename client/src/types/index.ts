@@ -347,6 +347,7 @@ export interface MenuItem {
   categoryId: string;
   stationId?: string | null;
   name: string;
+  code?: string;
   description?: string | null;
   price: number | string;
   isAvailable: boolean;
@@ -464,6 +465,7 @@ export interface Invoice {
   createdAt: string;
   order: Order;
   payments: Payment[];
+  franchise?: Franchise;
   totalPaid?: number;
   remainingBalance?: number;
   isFullyPaid?: boolean;
@@ -512,4 +514,156 @@ export interface ApiResponse<T = any> {
   message?: string;
   data: T;
   errors?: any;
+}
+
+export type CustomerSegment =
+  | "NEW"
+  | "REGULAR"
+  | "LOYAL"
+  | "VIP"
+  | "HIGH_VALUE"
+  | "AT_RISK"
+  | "INACTIVE"
+  | "WIN_BACK"
+  | "OCCASIONAL";
+
+export type CampaignType =
+  | "WIN_BACK"
+  | "BIRTHDAY"
+  | "ANNIVERSARY"
+  | "LOYALTY_REWARD"
+  | "CUSTOM"
+  | "FESTIVE";
+
+export type CampaignStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELLED";
+
+export type CommunicationChannel = "SMS" | "WHATSAPP" | "EMAIL";
+
+export type CommunicationStatus = "QUEUED" | "SENT" | "DELIVERED" | "FAILED" | "CANCELLED";
+
+export interface CustomerPreference {
+  id: string;
+  customerId: string;
+  favoriteCategoryId?: string | null;
+  favoriteMenuItemId?: string | null;
+  favoriteItemName?: string | null;
+  dietaryNotes?: string | null;
+  spicePreference?: string | null;
+  seatingPreference?: string | null;
+}
+
+export interface CustomerVisit {
+  id: string;
+  customerId: string;
+  franchiseId: string;
+  orderId?: string | null;
+  tableSessionId?: string | null;
+  spend: number | string;
+  itemsCount: number;
+  visitDate: string;
+  franchise?: { name: string } | null;
+}
+
+export interface Customer {
+  id: string;
+  franchiseId?: string | null;
+  name: string;
+  phone: string;
+  email?: string | null;
+  birthday?: string | null;
+  anniversary?: string | null;
+  marketingConsent: boolean;
+  optOutAt?: string | null;
+  segment: CustomerSegment;
+  totalVisits: number;
+  totalSpend: number | string;
+  averageOrderValue: number | string;
+  lastVisitAt?: string | null;
+  firstVisitAt?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  preference?: CustomerPreference | null;
+  visits?: CustomerVisit[];
+  orders?: Order[];
+  franchise?: { id: string; name: string; code: string } | null;
+  _count?: { visits: number; orders: number };
+}
+
+export interface Campaign {
+  id: string;
+  franchiseId?: string | null;
+  name: string;
+  type: CampaignType;
+  status: CampaignStatus;
+  channel: CommunicationChannel;
+  targetSegment?: CustomerSegment | null;
+  messageTemplate: string;
+  discountCode?: string | null;
+  discountPercent?: number | string | null;
+  scheduledAt?: string | null;
+  sentAt?: string | null;
+  cooldownDays: number;
+  totalRecipients: number;
+  deliveredCount: number;
+  failedCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommunicationLog {
+  id: string;
+  customerId: string;
+  campaignId?: string | null;
+  channel: CommunicationChannel;
+  recipient: string;
+  message: string;
+  status: CommunicationStatus;
+  failureReason?: string | null;
+  sentAt?: string | null;
+  createdAt: string;
+  customer?: { name: string; phone: string; segment: CustomerSegment } | null;
+  campaign?: { name: string; type: CampaignType } | null;
+}
+
+export interface SegmentDistribution {
+  segment: CustomerSegment;
+  count: number;
+  percentage: number;
+  totalSpend: number;
+  avgVisits: number;
+}
+
+export interface CRMAnalytics {
+  totalCustomers: number;
+  optedInCount: number;
+  optInRate: number;
+  totalRevenue: number;
+  avgLifetimeSpend: number;
+  distribution: SegmentDistribution[];
+}
+
+export interface BrandSettings {
+  id: string;
+  businessName: string;
+  tagline?: string | null;
+  logoUrl?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  taxNumber?: string | null;
+  fssaiNumber?: string | null;
+  currencySymbol?: string;
+  currencyCode?: string;
+  currency?: string;
+  defaultGstRate: number | string;
+  vipDiscountPercent?: number | string;
+  loyalDiscountPercent?: number | string;
+  regularDiscountPercent?: number | string;
+  loyaltyVipDiscount?: number | string;
+  loyaltyLoyalDiscount?: number | string;
+  loyaltyRegularDiscount?: number | string;
+  whatsappSupportNumber?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

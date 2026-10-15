@@ -15,11 +15,20 @@ import {
   CheckCircle2,
   XCircle,
   HelpCircle,
+  UserCheck,
+  UserPlus,
+  Sparkles,
+  Phone,
+  X,
+  MessageSquare,
+  Tag,
+  Percent,
+  BadgePercent,
 } from "lucide-react";
 import { api, extractErrorMessage } from "../../services/api.js";
 import { useAuthStore } from "../../store/authStore.js";
 import { useCartStore } from "../../store/cartStore.js";
-import type { Category, MenuItem, RestaurantTable } from "../../types/index.js";
+import type { Category, MenuItem, RestaurantTable, Customer, BrandSettings } from "../../types/index.js";
 import { Button } from "../../components/common/Button.js";
 import { Input } from "../../components/common/Input.js";
 import { Select } from "../../components/common/Select.js";
@@ -61,6 +70,137 @@ export const POSPage: React.FC = () => {
   const [postPaymentOrder, setPostPaymentOrder] = useState<any | null>(null);
   const [postPaymentInvoice, setPostPaymentInvoice] = useState<any | null>(null);
   const [showKotModal, setShowKotModal] = useState(false);
+
+  // Customer CRM Recognition State
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customerPhoneQuery, setCustomerPhoneQuery] = useState("");
+  const [isSearchingCustomer, setIsSearchingCustomer] = useState(false);
+  const [customerSearchMsg, setCustomerSearchMsg] = useState<string | null>(null);
+  const [showQuickAddCustomer, setShowQuickAddCustomer] = useState(false);
+  const [quickAddForm, setQuickAddForm] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    marketingConsent: true,
+  });
+
+  // CRM Campaign Promo & Loyalty Discount State
+  const [couponCode, setCouponCode] = useState("");
+  const [promoMessage, setPromoMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
+  // Fetch Brand Settings for business info and loyalty discount rates
+  const { data: brandSettings } = useQuery<BrandSettings>({
+    queryKey: ["brand-settings"],
+    queryFn: async () => {
+      const res = await api.get("/brand-settings");
+      return res.data.data;
+    },
+  });
+
+  // Fetch Active Campaigns to validate promo codes
+  const { data: campaigns = [] } = useQuery<any[]>({
+    queryKey: ["crm-campaigns", selectedFranchiseId],
+    queryFn: async () => {
+      const res = await api.get("/crm/campaigns");
+      return res.data.data;
+    },
+  });
+
+  const getCustomerLoyaltyDiscountRate = (segment?: string) => {
+    if (!segment) return 0;
+    const vipRate = brandSettings?.loyaltyVipDiscount ? Number(brandSettings.loyaltyVipDiscount) : 20;
+    const loyalRate = brandSettings?.loyaltyLoyalDiscount ? Number(brandSettings.loyaltyLoyalDiscount) : 15;
+    const regRate = brandSettings?.loyaltyRegularDiscount ? Number(brandSettings.loyaltyRegularDiscount) : 10;
+    if (segment === "VIP" || segment === "HIGH_VALUE") return vipRate;
+    if (segment === "LOYAL") return loyalRate;
+    if (segment === "REGULAR") return regRate;
+    return 0;
+  };
+
+  const applyLoyaltyDiscount = () => {
+    if (!selectedCustomer) return;
+    const rate = getCustomerLoyaltyDiscountRate(selectedCustomer.segment);
+    if (rate <= 0) return;
+    const currentSubtotal = getSubtotal();
+    const disc = Number(((currentSubtotal * rate) / 100).toFixed(2));
+    setDiscount(disc);
+    setPromoMessage({ text: `${selectedCustomer.segment} loyalty discount (${rate}% = -₹${disc}) applied!`, type: "success" });
+  };
+
+  const applyPromoCode = (codeToApply?: string) => {
+    const code = (codeToApply || couponCode).trim().toUpperCase();
+    if (!code) return;
+    const currentSubtotal = getSubtotal();
+    if (currentSubtotal <= 0) {
+      setPromoMessage({ text: "Add items to cart before applying coupon", type: "error" });
+      return;
+    }
+
+    let pct = 0;
+    const matched = campaigns.find((c: any) => c.discountCode && c.discountCode.toUpperCase() === code);
+    if (matched && matched.discountPercent) {
+      pct = Number(matched.discountPercent);
+    } else if (code === "WELCOME10") {
+      pct = 10;
+    } else if (code === "VIP20") {
+      pct = 20;
+    } else if (code === "LOYAL15") {
+      pct = 15;
+    } else if (code === "FESTIVE25") {
+      pct = 25;
+    } else {
+      setPromoMessage({ text: `Invalid or expired coupon "${code}"`, type: "error" });
+      return;
+    }
+
+    const disc = Number(((currentSubtotal * pct) / 100).toFixed(2));
+    setDiscount(disc);
+    setPromoMessage({ text: `Coupon "${code}" applied: ${pct}% OFF (-₹${disc})`, type: "success" });
+  };
+
+  const handleCustomerLookup = async (phoneToLookup?: string) => {
+    const q = phoneToLookup !== undefined ? phoneToLookup : customerPhoneQuery;
+    if (!q || q.trim().length < 3) return;
+
+    setIsSearchingCustomer(true);
+    setCustomerSearchMsg(null);
+    try {
+      const res = await api.get("/crm/lookup", { params: { phone: q.trim() } });
+      if (res.data.data) {
+        setSelectedCustomer(res.data.data);
+        if (!partyName) {
+          setPartyName(res.data.data.name);
+        }
+        setCustomerSearchMsg(null);
+      } else {
+        setCustomerSearchMsg("Not found. Click '+ Add' to register walk-in.");
+      }
+    } catch {
+      setCustomerSearchMsg("Error looking up customer");
+    } finally {
+      setIsSearchingCustomer(false);
+    }
+  };
+
+  const quickAddCustomerMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post("/crm/customers", {
+        ...quickAddForm,
+        franchiseId: selectedFranchiseId,
+      });
+      return res.data.data;
+    },
+    onSuccess: (customer: Customer) => {
+      setSelectedCustomer(customer);
+      if (!partyName) setPartyName(customer.name);
+      setShowQuickAddCustomer(false);
+      setCustomerPhoneQuery("");
+      setQuickAddForm({ name: "", phone: "", email: "", marketingConsent: true });
+    },
+    onError: (err) => {
+      setPosError(extractErrorMessage(err));
+    },
+  });
 
   // Fetch Tables
   const { data: tables = [] } = useQuery<RestaurantTable[]>({
@@ -119,6 +259,7 @@ export const POSPage: React.FC = () => {
 
       const payload = {
         tableId: selectedTable?.id || null,
+        customerId: selectedCustomer?.id || null,
         discount,
         taxRate,
         partyName: partyName || undefined,
@@ -143,6 +284,7 @@ export const POSPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ["kots"] });
       queryClient.invalidateQueries({ queryKey: ["tables"] });
       clearCart();
+      setSelectedCustomer(null);
       navigate("/orders");
     },
     onError: (err) => {
@@ -157,6 +299,7 @@ export const POSPage: React.FC = () => {
 
       const payload = {
         tableId: selectedTable?.id || null,
+        customerId: selectedCustomer?.id || null,
         discount,
         taxRate,
         partyName: partyName || undefined,
@@ -206,6 +349,7 @@ export const POSPage: React.FC = () => {
     const matchesCategory = activeCategory ? item.categoryId === activeCategory : true;
     const matchesSearch =
       item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.code || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (item.category?.name || "").toLowerCase().includes(searchTerm.toLowerCase());
     return matchesCategory && matchesSearch;
   });
@@ -327,6 +471,11 @@ export const POSPage: React.FC = () => {
                       <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider truncate">
                         {item.category?.name}
                       </span>
+                      {item.code && (
+                        <span className="text-[9px] font-mono font-bold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">
+                          {item.code}
+                        </span>
+                      )}
                       {!item.isAvailable && (
                         <span className="text-[9px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">
                           Out of Stock
@@ -373,6 +522,120 @@ export const POSPage: React.FC = () => {
             >
               <Trash2 className="w-3.5 h-3.5" /> Clear
             </button>
+          )}
+        </div>
+
+        {/* Customer CRM Recognition & Lookup */}
+        <div className="p-3 border-b border-gray-100 bg-slate-50 space-y-2">
+          {selectedCustomer ? (
+            <div className="p-2.5 rounded-xl bg-indigo-50/80 border border-indigo-200/80 relative">
+              <div className="flex items-start justify-between pr-5">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <UserCheck className="w-4 h-4 text-indigo-600" />
+                    <span className="font-bold text-xs text-gray-900">{selectedCustomer.name}</span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-600 text-white uppercase">
+                      {selectedCustomer.segment}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-gray-600 font-mono mt-0.5">
+                    {selectedCustomer.phone} • {selectedCustomer.totalVisits} visits • ₹{Number(selectedCustomer.totalSpend).toLocaleString("en-IN")}
+                  </div>
+                  {selectedCustomer.preference?.favoriteItemName && (
+                    <div className="text-[10px] text-indigo-700 font-medium mt-1 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-amber-500" />
+                      Prefers: {selectedCustomer.preference.favoriteItemName}
+                    </div>
+                  )}
+
+                  {getCustomerLoyaltyDiscountRate(selectedCustomer.segment) > 0 && (
+                    <div className="mt-2 pt-2 border-t border-indigo-200/60 flex items-center justify-between gap-1">
+                      <span className="text-[10px] font-bold text-indigo-900 flex items-center gap-1">
+                        <BadgePercent className="w-3.5 h-3.5 text-indigo-600" />
+                        {getCustomerLoyaltyDiscountRate(selectedCustomer.segment)}% Tier Discount
+                      </span>
+                      <button
+                        type="button"
+                        onClick={applyLoyaltyDiscount}
+                        className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[10px] font-bold shadow-xs cursor-pointer flex items-center gap-1 transition-colors"
+                      >
+                        <Percent className="w-2.5 h-2.5" /> Apply
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <a
+                      href={`https://wa.me/${selectedCustomer.phone.replace(/\D/g, "")}?text=${encodeURIComponent(
+                        `Hi ${selectedCustomer.name}! Thank you for dining with ${brandSettings?.businessName || "us"}. As our valued ${selectedCustomer.segment} customer, enjoy your visit!`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-medium transition-colors cursor-pointer"
+                      title="Send WhatsApp Greeting"
+                    >
+                      <MessageSquare className="w-2.5 h-2.5" /> WhatsApp Offer
+                    </a>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCustomer(null)}
+                  className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 p-1 cursor-pointer"
+                  title="Detach customer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <div className="flex gap-1.5">
+                <div className="relative flex-1">
+                  <Phone className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Customer phone..."
+                    value={customerPhoneQuery}
+                    onChange={(e) => {
+                      setCustomerPhoneQuery(e.target.value);
+                      if (e.target.value.trim().length >= 10) {
+                        handleCustomerLookup(e.target.value);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleCustomerLookup();
+                      }
+                    }}
+                    className="w-full bg-white border border-gray-200 rounded-lg pl-8 pr-2 py-1 text-xs text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCustomerLookup()}
+                  disabled={isSearchingCustomer || !customerPhoneQuery}
+                  className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                >
+                  {isSearchingCustomer ? "..." : "Find"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuickAddForm((prev) => ({ ...prev, phone: customerPhoneQuery }));
+                    setShowQuickAddCustomer(true);
+                  }}
+                  className="px-2 py-1 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 rounded-lg text-xs font-medium cursor-pointer transition-colors flex items-center gap-0.5"
+                  title="Quick Add Customer"
+                >
+                  <UserPlus className="w-3.5 h-3.5 text-indigo-600" />
+                </button>
+              </div>
+              {customerSearchMsg && (
+                <p className="text-[11px] text-amber-700 px-0.5">{customerSearchMsg}</p>
+              )}
+            </div>
           )}
         </div>
 
@@ -453,6 +716,40 @@ export const POSPage: React.FC = () => {
               <span className="font-semibold text-gray-900">₹{subtotal.toFixed(2)}</span>
             </div>
 
+            {/* Coupon / Promo Code Input */}
+            <div className="pt-1 space-y-1">
+              <div className="flex gap-1.5">
+                <div className="relative flex-1">
+                  <Tag className="w-3.5 h-3.5 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Coupon (e.g. WELCOME10)"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        applyPromoCode();
+                      }
+                    }}
+                    className="w-full text-[11px] uppercase bg-white border border-gray-200 rounded pl-6 pr-2 py-1 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => applyPromoCode()}
+                  className="px-2 py-1 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-semibold rounded cursor-pointer transition-colors"
+                >
+                  Apply
+                </button>
+              </div>
+              {promoMessage && (
+                <p className={`text-[10px] font-medium px-0.5 ${promoMessage.type === "success" ? "text-emerald-700" : "text-rose-600"}`}>
+                  {promoMessage.text}
+                </p>
+              )}
+            </div>
+
             <div className="flex items-center justify-between gap-2">
               <span className="shrink-0">Discount (₹):</span>
               <input
@@ -461,7 +758,7 @@ export const POSPage: React.FC = () => {
                 max={subtotal}
                 value={discount}
                 onChange={(e) => setDiscount(Number(e.target.value))}
-                className="w-20 text-right text-xs bg-white border border-gray-200 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="w-20 text-right text-xs bg-white border border-gray-200 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold text-emerald-700"
               />
             </div>
 
@@ -612,6 +909,78 @@ export const POSPage: React.FC = () => {
                 <ChefHat className="w-4 h-4" />
                 Send KOT to Kitchen
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Add Customer Modal */}
+      {showQuickAddCustomer && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-indigo-600" />
+                <h3 className="text-base font-bold text-gray-900">Quick Add Customer</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowQuickAddCustomer(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <Input
+                label="Full Name *"
+                placeholder="e.g. Ananya Patel"
+                value={quickAddForm.name}
+                onChange={(e) => setQuickAddForm({ ...quickAddForm, name: e.target.value })}
+                required
+              />
+
+              <Input
+                label="Phone Number *"
+                placeholder="e.g. +91 9876543210"
+                value={quickAddForm.phone}
+                onChange={(e) => setQuickAddForm({ ...quickAddForm, phone: e.target.value })}
+                required
+              />
+
+              <Input
+                label="Email (Optional)"
+                type="email"
+                placeholder="ananya@example.com"
+                value={quickAddForm.email}
+                onChange={(e) => setQuickAddForm({ ...quickAddForm, email: e.target.value })}
+              />
+
+              <label className="flex items-start gap-2 text-xs text-gray-600 cursor-pointer pt-1">
+                <input
+                  type="checkbox"
+                  checked={quickAddForm.marketingConsent}
+                  onChange={(e) => setQuickAddForm({ ...quickAddForm, marketingConsent: e.target.checked })}
+                  className="rounded text-indigo-600 mt-0.5"
+                />
+                <span>Consent received for order bills, loyalty rewards & offers via SMS/WhatsApp</span>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+              <Button variant="secondary" size="sm" onClick={() => setShowQuickAddCustomer(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => quickAddCustomerMutation.mutate()}
+                isLoading={quickAddCustomerMutation.isPending}
+                disabled={!quickAddForm.name || !quickAddForm.phone}
+              >
+                Register & Attach
+              </Button>
             </div>
           </div>
         </div>

@@ -11,8 +11,8 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const login = useAuthStore((state) => state.login);
 
-  const [email, setEmail] = useState("admin@restaurant.local");
-  const [password, setPassword] = useState("Admin@12345");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -33,12 +33,6 @@ export const LoginPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleQuickFill = (demoEmail: string, demoPass = "Admin@12345") => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
-    setErrorMessage(null);
   };
 
   return (
@@ -111,32 +105,9 @@ export const LoginPage: React.FC = () => {
               className="w-full mt-2 font-semibold shadow-lg shadow-indigo-600/20"
               isLoading={isLoading}
             >
-              Sign In to Terminal
+              Sign In
             </Button>
           </form>
-
-          {/* Quick Demo Switcher */}
-          <div className="mt-8 pt-6 border-t border-slate-800">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 text-center">
-              Quick Switch Role
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickFill("admin@restaurant.local", "Admin@12345")}
-                className="px-3 py-2 bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg text-xs font-medium border border-slate-700/60 text-left transition-colors cursor-pointer"
-              >
-                👑 Super Admin
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickFill("manager@restaurant.local", "Password@123")}
-                className="px-3 py-2 bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg text-xs font-medium border border-slate-700/60 text-left transition-colors cursor-pointer"
-              >
-                🏬 Manager
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>

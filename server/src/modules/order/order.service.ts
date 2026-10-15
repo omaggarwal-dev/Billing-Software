@@ -15,6 +15,7 @@ export const orderItemInputSchema = z.object({
 export const createOrderSchema = z.object({
   tableSessionId: z.string().optional().nullable(),
   tableId: z.string().optional().nullable(),
+  customerId: z.string().optional().nullable(),
   partyName: z.string().trim().optional(),
   guestCount: z.number().int().positive().default(1),
   discount: z.number().nonnegative().default(0),
@@ -23,6 +24,7 @@ export const createOrderSchema = z.object({
 });
 
 export const updateOrderSchema = z.object({
+  customerId: z.string().optional().nullable(),
   discount: z.number().nonnegative().optional(),
   taxRate: z.number().nonnegative().optional(),
   items: z.array(orderItemInputSchema).optional(),
@@ -75,6 +77,7 @@ export async function listOrders(
       invoice: {
         include: { payments: true },
       },
+      customer: true,
     },
     orderBy: { createdAt: "desc" },
   });
@@ -105,6 +108,7 @@ export async function getOrderById(id: string, franchiseId: string | null) {
       invoice: {
         include: { payments: true },
       },
+      customer: true,
     },
   });
 
@@ -220,8 +224,8 @@ export async function createOrder(
     return {
       menuItemId: item.menuItemId,
       quantity: item.quantity,
-      unitPrice: new Prisma.Decimal(unitPriceNum.toFixed(2)),
-      totalPrice: new Prisma.Decimal(totalPriceNum.toFixed(2)),
+      unitPrice: Number(unitPriceNum.toFixed(2)),
+      totalPrice: Number(totalPriceNum.toFixed(2)),
       notes: item.notes || null,
     };
   });
@@ -248,15 +252,16 @@ export async function createOrder(
     data: {
       franchiseId,
       tableSessionId: finalSessionId || null,
+      customerId: data.customerId || null,
       orderNumber,
       partyName: data.partyName,
       guestCount: data.guestCount || 1,
       status: OrderStatus.OPEN,
       kotDecision: "PENDING",
-      subtotal: new Prisma.Decimal(subtotalNum.toFixed(2)),
-      discount: new Prisma.Decimal(discountNum.toFixed(2)),
-      tax: new Prisma.Decimal(taxNum.toFixed(2)),
-      total: new Prisma.Decimal(totalNum.toFixed(2)),
+      subtotal: Number(subtotalNum.toFixed(2)),
+      discount: Number(discountNum.toFixed(2)),
+      tax: Number(taxNum.toFixed(2)),
+      total: Number(totalNum.toFixed(2)),
       items: {
         create: processedItems,
       },
@@ -338,8 +343,8 @@ export async function updateOrder(
       return {
         menuItemId: item.menuItemId,
         quantity: item.quantity,
-        unitPrice: new Prisma.Decimal(unitPriceNum.toFixed(2)),
-        totalPrice: new Prisma.Decimal(totalPriceNum.toFixed(2)),
+        unitPrice: Number(unitPriceNum.toFixed(2)),
+        totalPrice: Number(totalPriceNum.toFixed(2)),
         notes: item.notes || null,
       };
     });
@@ -363,10 +368,10 @@ export async function updateOrder(
       where: { id },
       data: {
         status: data.status || undefined,
-        subtotal: new Prisma.Decimal(subtotalNum.toFixed(2)),
-        discount: new Prisma.Decimal(discountNum.toFixed(2)),
-        tax: new Prisma.Decimal(taxNum.toFixed(2)),
-        total: new Prisma.Decimal(totalNum.toFixed(2)),
+        subtotal: Number(subtotalNum.toFixed(2)),
+        discount: Number(discountNum.toFixed(2)),
+        tax: Number(taxNum.toFixed(2)),
+        total: Number(totalNum.toFixed(2)),
       },
       include: {
         items: {

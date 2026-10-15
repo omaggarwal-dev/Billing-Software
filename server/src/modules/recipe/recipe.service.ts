@@ -83,13 +83,13 @@ export async function upsertRecipe(
           name: data.name,
           prepInstructions: data.prepInstructions,
           servingSize: data.servingSize,
-          wastageAllowance: new Prisma.Decimal(data.wastageAllowance),
+          wastageAllowance: Number(data.wastageAllowance),
           items: {
             create: data.items.map((i) => ({
               inventoryItemId: i.inventoryItemId,
-              quantity: new Prisma.Decimal(i.quantity),
+              quantity: Number(i.quantity),
               unit: i.unit.toLowerCase(),
-              wastageAllowance: new Prisma.Decimal(i.wastageAllowance),
+              wastageAllowance: Number(i.wastageAllowance),
             })),
           },
         },
@@ -103,13 +103,13 @@ export async function upsertRecipe(
           name: data.name,
           prepInstructions: data.prepInstructions,
           servingSize: data.servingSize,
-          wastageAllowance: new Prisma.Decimal(data.wastageAllowance),
+          wastageAllowance: Number(data.wastageAllowance),
           items: {
             create: data.items.map((i) => ({
               inventoryItemId: i.inventoryItemId,
-              quantity: new Prisma.Decimal(i.quantity),
+              quantity: Number(i.quantity),
               unit: i.unit.toLowerCase(),
-              wastageAllowance: new Prisma.Decimal(i.wastageAllowance),
+              wastageAllowance: Number(i.wastageAllowance),
             })),
           },
         },
