@@ -1,5 +1,5 @@
 import http from "http";
-import express from "express";
+import express, { type Request, type Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 
@@ -51,7 +51,7 @@ app.use(
 app.use(express.json());
 
 // Health & diagnostics
-app.get("/api/health", (_req, res) => {
+app.get("/api/health", (_req: Request, res: Response) => {
   res.json({
     success: true,
     message: "Restaurant Management & POS API is running",
@@ -59,7 +59,7 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.get("/api/db-test", async (_req, res) => {
+app.get("/api/db-test", async (_req: Request, res: Response) => {
   try {
     const franchiseCount = await prisma.franchise.count();
     res.json({
