@@ -20,19 +20,19 @@ router.use(authenticate);
 
 // Categories
 router.get("/categories", getCategories);
-router.post("/categories", authorize("SUPER_ADMIN", "FRANCHISE_MANAGER"), addCategory);
-router.put("/categories/:id", authorize("SUPER_ADMIN", "FRANCHISE_MANAGER"), editCategory);
-router.delete("/categories/:id", authorize("SUPER_ADMIN", "FRANCHISE_MANAGER"), removeCategory);
+router.post("/categories", authorize("SUPER_ADMIN"), addCategory);
+router.put("/categories/:id", authorize("SUPER_ADMIN"), editCategory);
+router.delete("/categories/:id", authorize("SUPER_ADMIN"), removeCategory);
 
 // Stations
 router.get("/stations", getStations);
-router.post("/stations", authorize("SUPER_ADMIN", "FRANCHISE_MANAGER"), addStation);
+router.post("/stations", authorize("SUPER_ADMIN"), addStation);
 
 // Items
 router.get("/items", getItems);
 router.get("/items/:id", getItem);
-router.post("/items", authorize("SUPER_ADMIN", "FRANCHISE_MANAGER"), addItem);
-router.put("/items/:id", authorize("SUPER_ADMIN", "FRANCHISE_MANAGER"), editItem);
+router.post("/items", authorize("SUPER_ADMIN"), addItem);
+router.put("/items/:id", authorize("SUPER_ADMIN"), editItem);
 router.patch("/items/:id/availability", authorize("SUPER_ADMIN", "FRANCHISE_MANAGER", "CHEF"), toggleAvailability);
 
 export default router;

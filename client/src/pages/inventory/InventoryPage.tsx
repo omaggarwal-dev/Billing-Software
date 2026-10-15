@@ -13,7 +13,7 @@ import {
   Edit2,
   Filter,
 } from "lucide-react";
-import { api } from "../../services/api.js";
+import { api, extractErrorMessage } from "../../services/api.js";
 import { useAuthStore } from "../../store/authStore.js";
 import type { InventoryItem, InventoryTransaction, InventoryStats } from "../../types/index.js";
 import { Card } from "../../components/common/Card.js";
@@ -38,6 +38,7 @@ export const InventoryPage: React.FC = () => {
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
   const [isLedgerModalOpen, setIsLedgerModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [itemModalError, setItemModalError] = useState<string | null>(null);
 
   // Forms state
   const [itemForm, setItemForm] = useState({
@@ -110,6 +111,10 @@ export const InventoryPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ["inventory-stats"] });
       setIsItemModalOpen(false);
       setEditingItem(null);
+      setItemModalError(null);
+    },
+    onError: (err: any) => {
+      setItemModalError(extractErrorMessage(err));
     },
   });
 
@@ -188,6 +193,7 @@ export const InventoryPage: React.FC = () => {
                   purchasePrice: 0,
                   supplier: "",
                 });
+                setItemModalError(null);
                 setIsItemModalOpen(true);
               }}
               icon={<Plus className="w-4 h-4" />}
@@ -362,6 +368,7 @@ export const InventoryPage: React.FC = () => {
                                 purchasePrice: Number(item.purchasePrice),
                                 supplier: item.supplier || "",
                               });
+                              setItemModalError(null);
                               setIsItemModalOpen(true);
                             }}
                             icon={<Edit2 className="w-3.5 h-3.5" />}
@@ -508,12 +515,27 @@ export const InventoryPage: React.FC = () => {
         title={editingItem ? "Edit Raw Material" : "Add Raw Material"}
       >
         <div className="space-y-4">
-          <Input
-            label="Item Name"
-            placeholder="e.g. Paneer, Butter, Basmati Rice"
-            value={itemForm.name}
-            onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
-          />
+          {itemModalError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs font-medium">
+              {itemModalError}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Item Name *"
+              required
+              placeholder="e.g. Paneer, Butter, Basmati Rice"
+              value={itemForm.name}
+              onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
+            />
+            <Input
+              label="Raw Material Code (Unique) *"
+              required
+              placeholder="e.g. RAW-PAN01"
+              value={itemForm.code}
+              onChange={(e) => setItemForm({ ...itemForm, code: e.target.value.toUpperCase() })}
+            />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Input
               label="Category"

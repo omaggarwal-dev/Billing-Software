@@ -132,6 +132,49 @@ enum NotificationType {
   INFO
 }
 
+enum CustomerSegment {
+  NEW
+  REGULAR
+  LOYAL
+  VIP
+  HIGH_VALUE
+  AT_RISK
+  INACTIVE
+  WIN_BACK
+  OCCASIONAL
+}
+
+enum CampaignType {
+  WIN_BACK
+  BIRTHDAY
+  ANNIVERSARY
+  LOYALTY_REWARD
+  CUSTOM
+  FESTIVE
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum CommunicationChannel {
+  SMS
+  WHATSAPP
+  EMAIL
+}
+
+enum CommunicationStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+  CANCELLED
+}
+
 // =========================
 // FRANCHISE
 // =========================
@@ -170,6 +213,9 @@ model Franchise {
   expenses              Expense[]
   employeeAdvances      EmployeeAdvance[]
   notifications         Notification[]
+  customers             Customer[]
+  customerVisits        CustomerVisit[]
+  campaigns             Campaign[]
 }
 
 // =========================
@@ -439,6 +485,7 @@ model InventoryItem {
   purchaseItems PurchaseItem[]
 
   @@unique([franchiseId, name])
+  @@unique([franchiseId, code])
   @@index([franchiseId])
 }
 
@@ -569,6 +616,7 @@ model MenuItem {
   stationId   String?
 
   name        String
+  code        String  @default("")
   description String?
   price       Decimal @db.Decimal(10, 2)
   isAvailable Boolean @default(true)
@@ -584,6 +632,7 @@ model MenuItem {
   kotItems   KOTItem[]
   recipe     Recipe?
 
+  @@unique([franchiseId, code])
   @@index([franchiseId])
   @@index([categoryId])
   @@index([stationId])
@@ -635,6 +684,7 @@ model Order {
   id             String  @id @default(uuid())
   franchiseId    String
   tableSessionId String?
+  customerId     String?
 
   orderNumber String
   status      OrderStatus @default(OPEN)
@@ -655,6 +705,7 @@ model Order {
 
   franchise    Franchise     @relation(fields: [franchiseId], references: [id])
   tableSession TableSession? @relation(fields: [tableSessionId], references: [id])
+  customer     Customer?     @relation(fields: [customerId], references: [id])
 
   items   OrderItem[]
   kots    KOT[]
@@ -663,6 +714,7 @@ model Order {
   @@unique([franchiseId, orderNumber])
   @@index([franchiseId])
   @@index([tableSessionId])
+  @@index([customerId])
 }
 
 model OrderItem {
@@ -861,3 +913,163 @@ model AuditLog {
   @@index([userId])
   @@index([createdAt])
 }
+
+// =========================
+// CUSTOMER & CRM
+// =========================
+
+model Customer {
+  id                String            @id @default(uuid())
+  franchiseId       String?
+  name              String
+  phone             String            @unique
+  email             String?
+  birthday          DateTime?
+  anniversary       DateTime?
+  marketingConsent  Boolean           @default(true)
+  optOutAt          DateTime?
+  segment           CustomerSegment   @default(NEW)
+  totalVisits       Int               @default(0)
+  totalSpend        Decimal           @default(0) @db.Decimal(12, 2)
+  averageOrderValue Decimal           @default(0) @db.Decimal(12, 2)
+  lastVisitAt       DateTime?
+  firstVisitAt      DateTime?
+  notes             String?
+
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  franchise         Franchise?        @relation(fields: [franchiseId], references: [id])
+  visits            CustomerVisit[]
+  orders            Order[]
+  communicationLogs CommunicationLog[]
+  preference        CustomerPreference?
+
+  @@index([franchiseId])
+  @@index([segment])
+  @@index([lastVisitAt])
+  @@index([phone])
+}
+
+model CustomerVisit {
+  id             String   @id @default(uuid())
+  customerId     String
+  franchiseId    String
+  orderId        String?  @unique
+  tableSessionId String?
+  spend          Decimal  @default(0) @db.Decimal(12, 2)
+  itemsCount     Int      @default(0)
+  visitDate      DateTime @default(now())
+
+  customer  Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  franchise Franchise @relation(fields: [franchiseId], references: [id])
+
+  @@index([customerId])
+  @@index([franchiseId])
+  @@index([visitDate])
+}
+
+model CustomerPreference {
+  id                 String   @id @default(uuid())
+  customerId         String   @unique
+  favoriteCategoryId String?
+  favoriteMenuItemId String?
+  favoriteItemName   String?
+  dietaryNotes       String?
+  spicePreference    String?
+  seatingPreference  String?
+  updatedAt          DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model Campaign {
+  id              String               @id @default(uuid())
+  franchiseId     String?
+  name            String
+  type            CampaignType
+  status          CampaignStatus       @default(DRAFT)
+  channel         CommunicationChannel @default(SMS)
+  targetSegment   CustomerSegment?
+  messageTemplate String
+  discountCode    String?
+  discountPercent Decimal?             @db.Decimal(5, 2)
+  scheduledAt     DateTime?
+  sentAt          DateTime?
+  cooldownDays    Int                  @default(7)
+  totalRecipients Int                  @default(0)
+  deliveredCount  Int                  @default(0)
+  failedCount     Int                  @default(0)
+
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  franchise         Franchise?         @relation(fields: [franchiseId], references: [id])
+  rules             CampaignRule[]
+  communicationLogs CommunicationLog[]
+
+  @@index([franchiseId])
+  @@index([status])
+}
+
+model CampaignRule {
+  id         String   @id @default(uuid())
+  campaignId String
+  ruleType   String
+  condition  String
+  value      String
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+}
+
+model CommunicationLog {
+  id            String              @id @default(uuid())
+  customerId    String
+  campaignId    String?
+  channel       CommunicationChannel
+  recipient     String
+  message       String
+  status        CommunicationStatus @default(QUEUED)
+  failureReason String?
+  sentAt        DateTime?
+
+  createdAt     DateTime            @default(now())
+
+  customer Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([customerId])
+  @@index([campaignId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// =========================
+// BRAND SETTINGS & BUSINESS PROFILE
+// =========================
+
+model BrandSettings {
+  id                     String   @id @default(uuid())
+  businessName           String   @default("My Restaurant Brand")
+  tagline                String?
+  logoUrl                String?
+  email                  String?
+  phone                  String?
+  address                String?
+  taxNumber              String?  // GSTIN / Tax ID
+  fssaiNumber            String?  // FSSAI Food License
+  currencySymbol         String   @default("₹")
+  currencyCode           String   @default("INR")
+  defaultGstRate         Decimal  @default(5.0) @db.Decimal(5, 2)
+  vipDiscountPercent     Decimal  @default(20.0) @db.Decimal(5, 2)
+  loyalDiscountPercent   Decimal  @default(15.0) @db.Decimal(5, 2)
+  regularDiscountPercent Decimal  @default(10.0) @db.Decimal(5, 2)
+  whatsappSupportNumber  String?
+
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+

@@ -16,7 +16,7 @@ export async function list(req: AuthenticatedRequest, res: Response, next: NextF
       startDate: req.query.startDate as string | undefined,
       endDate: req.query.endDate as string | undefined,
     };
-    const invoices = await listInvoices(franchiseId, filters);
+    const invoices = await listInvoices(franchiseId, filters, req.user?.role);
     return res.json({ success: true, data: invoices });
   } catch (error) {
     next(error);
@@ -27,7 +27,7 @@ export async function get(req: AuthenticatedRequest, res: Response, next: NextFu
   try {
     const id = req.params.id as string;
     const franchiseId = getFranchiseId(req);
-    const invoice = await getInvoiceById(id, franchiseId);
+    const invoice = await getInvoiceById(id, franchiseId, req.user?.role);
     return res.json({ success: true, data: invoice });
   } catch (error) {
     next(error);

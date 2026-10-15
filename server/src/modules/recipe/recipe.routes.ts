@@ -16,8 +16,8 @@ router.use(authenticate);
 router.get("/", authorizeRole(UserRole.SUPER_ADMIN, UserRole.FRANCHISE_MANAGER, UserRole.CHEF, UserRole.CASHIER), listRecipesHandler);
 router.get("/menu-item/:menuItemId", authorizeRole(UserRole.SUPER_ADMIN, UserRole.FRANCHISE_MANAGER, UserRole.CHEF, UserRole.CASHIER), getRecipeHandler);
 
-// Manage recipes - Manager, Super Admin, Chef
-router.post("/menu-item/:menuItemId", authorizeRole(UserRole.SUPER_ADMIN, UserRole.FRANCHISE_MANAGER, UserRole.CHEF), upsertRecipeHandler);
-router.delete("/menu-item/:menuItemId", authorizeRole(UserRole.SUPER_ADMIN, UserRole.FRANCHISE_MANAGER), deleteRecipeHandler);
+// Manage recipes (SOP) - Super Admin / Brand Owner only
+router.post("/menu-item/:menuItemId", authorizeRole(UserRole.SUPER_ADMIN), upsertRecipeHandler);
+router.delete("/menu-item/:menuItemId", authorizeRole(UserRole.SUPER_ADMIN), deleteRecipeHandler);
 
 export default router;

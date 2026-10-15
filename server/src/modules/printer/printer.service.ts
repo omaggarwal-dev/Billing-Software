@@ -124,7 +124,7 @@ export async function deletePrinter(id: string, franchiseId: string, currentUser
 /**
  * Generate formatted text / ESC-POS representation for KOT or Receipt printing
  */
-export async function generatePrintPayload(type: "KOT" | "RECEIPT", targetId: string, franchiseId: string) {
+export async function generatePrintPayload(type: "KOT" | "RECEIPT", targetId: string, franchiseId: string | null) {
   if (type === "KOT") {
     const kot = await prisma.kOT.findUnique({
       where: { id: targetId },
@@ -142,7 +142,7 @@ export async function generatePrintPayload(type: "KOT" | "RECEIPT", targetId: st
       },
     });
 
-    if (!kot || kot.franchiseId !== franchiseId) {
+    if (!kot || (franchiseId && kot.franchiseId !== franchiseId)) {
       throw new AppError("KOT not found", 404);
     }
 
@@ -198,55 +198,76 @@ export async function generatePrintPayload(type: "KOT" | "RECEIPT", targetId: st
     },
   });
 
-  if (!invoice || invoice.franchiseId !== franchiseId) {
+  if (!invoice || (franchiseId && invoice.franchiseId !== franchiseId)) {
     throw new AppError("Invoice not found", 404);
   }
+
+  const brand = await prisma.brandSettings.findFirst();
+  const brandName = brand?.businessName?.trim().toUpperCase() || "RESTAURANT BRAND";
+  const franchiseName = invoice.franchise.name.toUpperCase();
+  const franchiseAddress = invoice.franchise.address?.trim() || brand?.address?.trim() || "";
+  const franchisePhone = invoice.franchise.phone?.trim() || brand?.phone?.trim() || "";
+  const gstin = brand?.taxNumber?.trim() ? `GSTIN: ${brand.taxNumber.trim()}` : "";
+  const fssai = brand?.fssaiNumber?.trim() ? `FSSAI: ${brand.fssaiNumber.trim()}` : "";
+  const currSym = brand?.currencySymbol || "₹";
 
   const tableStr = invoice.order.tableSession?.table ? `Table: ${invoice.order.tableSession.table.tableNumber}` : "Takeaway";
   const dateStr = new Date(invoice.createdAt).toLocaleString();
 
   let lines = [
     "================================",
-    `     ${invoice.franchise.name.toUpperCase()}     `,
-    `  ${invoice.franchise.address || ""}  `,
-    `  Phone: ${invoice.franchise.phone || "N/A"}  `,
-    "================================",
-    `Invoice: ${invoice.invoiceNumber}`,
-    `Order  : ${invoice.order.orderNumber}`,
-    `${tableStr}`,
-    `Date   : ${dateStr}`,
-    "--------------------------------",
-    "Item             Qty      Price",
-    "--------------------------------",
+    `     ${brandName}     `,
+    `--- ${franchiseName} ---`,
   ];
+
+  if (franchiseAddress) {
+    lines.push(`  ${franchiseAddress}  `);
+  }
+  if (franchisePhone) {
+    lines.push(`  Phone: ${franchisePhone}  `);
+  }
+  if (gstin) {
+    lines.push(`  ${gstin}  `);
+  }
+  if (fssai) {
+    lines.push(`  ${fssai}  `);
+  }
+  lines.push("================================");
+  lines.push(`Invoice: ${invoice.invoiceNumber}`);
+  lines.push(`Order  : ${invoice.order.orderNumber}`);
+  lines.push(`${tableStr}`);
+  lines.push(`Date   : ${dateStr}`);
+  lines.push("--------------------------------");
+  lines.push("Item             Qty      Price");
+  lines.push("--------------------------------");
 
   for (const item of invoice.order.items) {
     const name = item.menuItem.name.padEnd(16, " ").substring(0, 16);
     const qty = String(item.quantity).padStart(3, " ");
-    const price = Number(item.totalPrice).toFixed(2).padStart(9, " ");
+    const price = `${currSym}${Number(item.totalPrice).toFixed(2)}`.padStart(11, " ");
     lines.push(`${name} ${qty} ${price}`);
   }
 
   lines.push("--------------------------------");
-  lines.push(`Subtotal:             Rs.${Number(invoice.subtotal).toFixed(2)}`);
+  lines.push(`Subtotal:             ${currSym}${Number(invoice.subtotal).toFixed(2)}`);
   if (Number(invoice.discount) > 0) {
-    lines.push(`Discount:            -Rs.${Number(invoice.discount).toFixed(2)}`);
+    lines.push(`Discount:            -${currSym}${Number(invoice.discount).toFixed(2)}`);
   }
-  lines.push(`Tax:                  Rs.${Number(invoice.tax).toFixed(2)}`);
+  lines.push(`Tax:                  ${currSym}${Number(invoice.tax).toFixed(2)}`);
   lines.push("================================");
-  lines.push(`TOTAL:                Rs.${Number(invoice.total).toFixed(2)}`);
+  lines.push(`TOTAL:                ${currSym}${Number(invoice.total).toFixed(2)}`);
   lines.push("================================");
 
   if (invoice.payments.length > 0) {
     lines.push("PAYMENTS:");
     for (const p of invoice.payments) {
-      lines.push(`  ${p.method.padEnd(8, " ")}: Rs.${Number(p.amount).toFixed(2)} [${p.status}]`);
+      lines.push(`  ${p.method.padEnd(8, " ")}: ${currSym}${Number(p.amount).toFixed(2)} [${p.status}]`);
     }
   }
 
   lines.push("--------------------------------");
   lines.push("    Thank you for dining with us!   ");
-  lines.push("          Please visit again        ");
+  lines.push(`       Visit: ${invoice.franchise.name}      `);
   lines.push("\n\n\n");
 
   return {

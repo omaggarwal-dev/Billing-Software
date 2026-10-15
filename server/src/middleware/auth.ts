@@ -75,6 +75,8 @@ export function getFranchiseId(req: AuthenticatedRequest): string | null {
   if (req.user?.role === "SUPER_ADMIN") {
     const headerFranchise = req.headers["x-franchise-id"];
     if (typeof headerFranchise === "string") return headerFranchise;
+    if (typeof req.query.franchiseId === "string") return req.query.franchiseId;
+    if (typeof (req.body as any)?.franchiseId === "string") return (req.body as any).franchiseId;
     return req.user.franchiseId ?? null;
   }
   return req.user?.franchiseId ?? null;

@@ -7,7 +7,7 @@ import { emitToFranchise } from "../../lib/socket.js";
 
 export const createInventoryItemSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
-  code: z.string().trim().optional(),
+  code: z.string().trim().min(1, "Raw material code is required").transform((val) => val.toUpperCase()),
   category: z.string().trim().optional(),
   unit: z.string().trim().min(1, "Unit is required"),
   currentStock: z.number().min(0).default(0),
@@ -72,12 +72,20 @@ export async function createInventoryItem(
   franchiseId: string,
   userId?: string
 ) {
-  const existing = await prisma.inventoryItem.findFirst({
+  const existingName = await prisma.inventoryItem.findFirst({
     where: { franchiseId, name: { equals: data.name, mode: "insensitive" } },
   });
 
-  if (existing) {
+  if (existingName) {
     throw new AppError("An inventory item with this name already exists in this franchise", 400);
+  }
+
+  const existingCode = await prisma.inventoryItem.findFirst({
+    where: { franchiseId, code: data.code },
+  });
+
+  if (existingCode) {
+    throw new AppError(`A raw material with code "${data.code}" already exists in this franchise`, 409);
   }
 
   return prisma.$transaction(async (tx) => {
@@ -134,6 +142,15 @@ export async function updateInventoryItem(
 ) {
   const existing = await prisma.inventoryItem.findFirst({ where: { id, franchiseId } });
   if (!existing) throw new AppError("Inventory item not found", 404);
+
+  if (data.code && data.code !== existing.code) {
+    const conflict = await prisma.inventoryItem.findFirst({
+      where: { franchiseId, code: data.code, NOT: { id } },
+    });
+    if (conflict) {
+      throw new AppError(`A raw material with code "${data.code}" already exists in this franchise`, 409);
+    }
+  }
 
   const updated = await prisma.inventoryItem.update({
     where: { id },

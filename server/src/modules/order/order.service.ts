@@ -15,6 +15,7 @@ export const orderItemInputSchema = z.object({
 export const createOrderSchema = z.object({
   tableSessionId: z.string().optional().nullable(),
   tableId: z.string().optional().nullable(),
+  customerId: z.string().optional().nullable(),
   partyName: z.string().trim().optional(),
   guestCount: z.number().int().positive().default(1),
   discount: z.number().nonnegative().default(0),
@@ -23,6 +24,7 @@ export const createOrderSchema = z.object({
 });
 
 export const updateOrderSchema = z.object({
+  customerId: z.string().optional().nullable(),
   discount: z.number().nonnegative().optional(),
   taxRate: z.number().nonnegative().optional(),
   items: z.array(orderItemInputSchema).optional(),
@@ -75,6 +77,7 @@ export async function listOrders(
       invoice: {
         include: { payments: true },
       },
+      customer: true,
     },
     orderBy: { createdAt: "desc" },
   });
@@ -105,6 +108,7 @@ export async function getOrderById(id: string, franchiseId: string | null) {
       invoice: {
         include: { payments: true },
       },
+      customer: true,
     },
   });
 
@@ -248,6 +252,7 @@ export async function createOrder(
     data: {
       franchiseId,
       tableSessionId: finalSessionId || null,
+      customerId: data.customerId || null,
       orderNumber,
       partyName: data.partyName,
       guestCount: data.guestCount || 1,

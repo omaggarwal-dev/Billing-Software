@@ -13,9 +13,10 @@ export const createInvoiceSchema = z.object({
 
 export async function listInvoices(
   franchiseId: string | null,
-  filters: { startDate?: string; endDate?: string }
+  filters: { startDate?: string; endDate?: string },
+  userRole?: string
 ) {
-  if (!franchiseId) return [];
+  if (!franchiseId && userRole !== "SUPER_ADMIN") return [];
 
   let dateFilter: { gte?: Date; lte?: Date } | undefined;
   if (filters.startDate || filters.endDate) {
@@ -30,7 +31,7 @@ export async function listInvoices(
 
   return prisma.invoice.findMany({
     where: {
-      franchiseId,
+      ...(franchiseId ? { franchiseId } : {}),
       createdAt: dateFilter,
     },
     include: {
@@ -45,12 +46,22 @@ export async function listInvoices(
         },
       },
       payments: true,
+      franchise: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          address: true,
+          phone: true,
+          email: true,
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
 }
 
-export async function getInvoiceById(id: string, franchiseId: string | null) {
+export async function getInvoiceById(id: string, franchiseId: string | null, userRole?: string) {
   const invoice = await prisma.invoice.findUnique({
     where: { id },
     include: {
@@ -78,7 +89,7 @@ export async function getInvoiceById(id: string, franchiseId: string | null) {
     },
   });
 
-  if (!invoice || (franchiseId && invoice.franchiseId !== franchiseId)) {
+  if (!invoice || (userRole !== "SUPER_ADMIN" && franchiseId && invoice.franchiseId !== franchiseId)) {
     throw new AppError("Invoice not found", 404);
   }
 

@@ -24,7 +24,7 @@ import { EmptyState } from "../../components/common/EmptyState.js";
 export const RecipesPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { selectedFranchiseId, user } = useAuthStore();
-  const canEdit = ["SUPER_ADMIN", "FRANCHISE_MANAGER", "CHEF"].includes(user?.role || "");
+  const isBrandOwner = user?.role === "SUPER_ADMIN";
 
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -133,13 +133,21 @@ export const RecipesPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="w-full sm:w-72">
-          <Input
-            placeholder="Search dish or recipe..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            leftIcon={<Search className="w-4 h-4" />}
-          />
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          {!isBrandOwner && (
+            <div className="p-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-900 text-xs flex items-center gap-2 max-w-sm">
+              <BookOpen className="w-4 h-4 text-indigo-600 shrink-0" />
+              <span>SOP Recipes are centrally created & published by Brand Owner.</span>
+            </div>
+          )}
+          <div className="w-full sm:w-72">
+            <Input
+              placeholder="Search dish or recipe..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              leftIcon={<Search className="w-4 h-4" />}
+            />
+          </div>
         </div>
       </div>
 
@@ -212,7 +220,7 @@ export const RecipesPage: React.FC = () => {
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
-                  {canEdit && (
+                  {isBrandOwner ? (
                     <>
                       {recipe && (
                         <Button
@@ -233,6 +241,8 @@ export const RecipesPage: React.FC = () => {
                         {recipe ? "Edit SOP" : "Create Recipe SOP"}
                       </Button>
                     </>
+                  ) : (
+                    <span className="text-[11px] text-gray-500 font-medium">SOP Recipe (Read-only for Kitchen Prep)</span>
                   )}
                 </div>
               </Card>

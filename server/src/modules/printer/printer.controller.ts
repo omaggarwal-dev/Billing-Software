@@ -62,7 +62,9 @@ export async function remove(req: AuthenticatedRequest, res: Response, next: Nex
 export async function printJob(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const franchiseId = getFranchiseId(req);
-    if (!franchiseId) throw new AppError("Franchise ID is required", 400);
+    if (!franchiseId && req.user?.role !== "SUPER_ADMIN") {
+      throw new AppError("Franchise ID is required", 400);
+    }
     const { type, targetId } = req.body as { type: "KOT" | "RECEIPT"; targetId: string };
     if (!type || !targetId) throw new AppError("Type (KOT/RECEIPT) and targetId are required", 400);
     const payload = await generatePrintPayload(type, targetId, franchiseId);

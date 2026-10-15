@@ -4,6 +4,7 @@ import prisma from "../../lib/prisma.js";
 import { AppError } from "../../middleware/error.js";
 import { logAudit } from "../../lib/audit.js";
 import { emitToFranchise } from "../../lib/socket.js";
+import { CRMService } from "../crm/crm.service.js";
 
 export const recordPaymentSchema = z.object({
   invoiceId: z.string().min(1, "Invoice ID is required"),
@@ -136,16 +137,24 @@ export async function processPayment(
   });
 
   const isFullyPaid = existingPaid + data.amount >= Number(invoice.total) - 0.01;
-  if (isFullyPaid && invoice.order?.tableSession?.tableId) {
-    const tableId = invoice.order.tableSession.tableId;
-    emitToFranchise(franchiseId, "table:status_changed", {
-      tableId,
-      status: TableStatus.AVAILABLE,
-    });
-    emitToFranchise(franchiseId, "table:session_closed", {
-      tableId,
-      sessionId: invoice.order.tableSession.id,
-    });
+  if (isFullyPaid) {
+    if (invoice.order?.tableSession?.tableId) {
+      const tableId = invoice.order.tableSession.tableId;
+      emitToFranchise(franchiseId, "table:status_changed", {
+        tableId,
+        status: TableStatus.AVAILABLE,
+      });
+      emitToFranchise(franchiseId, "table:session_closed", {
+        tableId,
+        sessionId: invoice.order.tableSession.id,
+      });
+    }
+
+    if (invoice.orderId) {
+      CRMService.recordCustomerTransaction(invoice.orderId).catch((err) => {
+        console.error("CRM transaction hook error in processPayment:", err);
+      });
+    }
   }
 
   emitToFranchise(franchiseId, "payment:received", payment);
@@ -237,16 +246,24 @@ export async function processSplitPayment(
   });
 
   const isFullyPaid = existingPaid + totalSplitAmount >= Number(invoice.total) - 0.01;
-  if (isFullyPaid && invoice.order?.tableSession?.tableId) {
-    const tableId = invoice.order.tableSession.tableId;
-    emitToFranchise(franchiseId, "table:status_changed", {
-      tableId,
-      status: TableStatus.AVAILABLE,
-    });
-    emitToFranchise(franchiseId, "table:session_closed", {
-      tableId,
-      sessionId: invoice.order.tableSession.id,
-    });
+  if (isFullyPaid) {
+    if (invoice.order?.tableSession?.tableId) {
+      const tableId = invoice.order.tableSession.tableId;
+      emitToFranchise(franchiseId, "table:status_changed", {
+        tableId,
+        status: TableStatus.AVAILABLE,
+      });
+      emitToFranchise(franchiseId, "table:session_closed", {
+        tableId,
+        sessionId: invoice.order.tableSession.id,
+      });
+    }
+
+    if (invoice.orderId) {
+      CRMService.recordCustomerTransaction(invoice.orderId).catch((err) => {
+        console.error("CRM split transaction hook error:", err);
+      });
+    }
   }
 
   for (const p of createdPayments) {

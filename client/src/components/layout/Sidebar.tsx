@@ -22,6 +22,7 @@ import {
   BookOpen,
   WalletCards,
   HandCoins,
+  Settings,
 } from "lucide-react";
 import { useAuthStore } from "../../store/authStore.js";
 
@@ -34,9 +35,21 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   {
+    name: "Brand & Business",
+    to: "/settings",
+    icon: <Settings className="w-5 h-5" />,
+    roles: ["SUPER_ADMIN"],
+  },
+  {
     name: "Dashboard",
     to: "/dashboard",
     icon: <LayoutDashboard className="w-5 h-5" />,
+    roles: ["SUPER_ADMIN", "FRANCHISE_MANAGER"],
+  },
+  {
+    name: "Customer CRM",
+    to: "/crm",
+    icon: <Users className="w-5 h-5" />,
     roles: ["SUPER_ADMIN", "FRANCHISE_MANAGER"],
   },
   {
